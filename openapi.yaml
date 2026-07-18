@@ -1,0 +1,3146 @@
+openapi: 3.0.0
+info:
+  title: Commons API
+  description: 'Image-sharing community app API. Users register, create profiles,
+    post photos
+
+    with captions, follow each other, like and comment, and browse a Home Feed
+
+    (followed users) and Discover Feed (all users). A paid monthly supporter
+
+    tier unlocks supporters-only content via Stripe Checkout. Admins sign in
+
+    with environment-configured credentials and moderate posts.
+
+    '
+  version: 1.0.0
+servers:
+- url: /
+  description: Same-origin
+tags:
+- name: Authentication
+- name: Admin
+- name: Profile
+- name: Media
+- name: Posts
+- name: Comments
+- name: Likes
+- name: Follows
+- name: Feed
+- name: Notifications
+- name: Subscription
+- name: Webhooks
+security:
+- bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Subscription:
+      type: object
+      required:
+      - _id
+      - status
+      - createdAt
+      - updatedAt
+      properties:
+        _id:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+          - active
+          - trialing
+          - past_due
+          - canceled
+          - unpaid
+          - incomplete
+          - pending
+        planId:
+          type: string
+          nullable: true
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        cancelAtPeriodEnd:
+          type: boolean
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Media:
+      type: object
+      required:
+      - _id
+      - url
+      - mimeType
+      - size
+      - fileName
+      - createdAt
+      properties:
+        _id:
+          type: string
+        url:
+          type: string
+          description: Canonical URL — use directly as <img src> or bioImageUrl/imageUrl
+        mimeType:
+          type: string
+        size:
+          type: integer
+          minimum: 0
+        fileName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Post:
+      type: object
+      required:
+      - _id
+      - authorId
+      - author
+      - content
+      - isLocked
+      - isLiked
+      - isOwner
+      - likeCount
+      - commentCount
+      - moderationStatus
+      - moderationRuleViolated
+      - createdAt
+      - updatedAt
+      properties:
+        _id:
+          type: string
+        authorId:
+          type: string
+          nullable: true
+        author:
+          $ref: '#/components/schemas/AuthorSummary'
+        content:
+          type: object
+          required:
+          - caption
+          - imageUrl
+          - supportersOnly
+          properties:
+            caption:
+              type: string
+            imageUrl:
+              type: string
+              nullable: true
+              description: null when post is locked for non-supporters
+            supportersOnly:
+              type: boolean
+        type:
+          type: string
+          enum:
+          - image
+        isLocked:
+          type: boolean
+          description: true when supportersOnly is true and the viewer does NOT have
+            an active subscription (and is not the post author)
+        isLiked:
+          type: boolean
+          description: true when the current viewer has liked this post
+        isOwner:
+          type: boolean
+          description: true when the current viewer is the author
+        likeCount:
+          type: integer
+          minimum: 0
+        commentCount:
+          type: integer
+          minimum: 0
+        moderationStatus:
+          type: string
+          enum:
+          - pending
+          - approved
+          - flagged
+          - admin_approved
+          - admin_removed
+          description: Moderation state resolved from ModerationReview._getLatestForTarget("post",
+            postId). "approved" or "admin_approved" means visible in feeds; "flagged"
+            or "pending" means hidden from non-authors; "admin_removed" means inaccessible.
+        moderationRuleViolated:
+          type: string
+          nullable: true
+          enum:
+          - harassment
+          - hate
+          - sexually_explicit
+          - spam
+          description: Which community guideline was violated, if moderationStatus
+            is "flagged"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AdminPrincipal:
+      type: object
+      required:
+      - subject
+      - source
+      - createdAt
+      properties:
+        subject:
+          type: string
+        source:
+          type: string
+          enum:
+          - root
+          - promoted
+        createdAt:
+          type: string
+          format: date-time
+    ModerationQueueItem:
+      type: object
+      required:
+      - reviewId
+      - targetType
+      - targetId
+      - authorId
+      - author
+      - status
+      - ruleViolated
+      - rationale
+      - content
+      - createdAt
+      - updatedAt
+      properties:
+        reviewId:
+          type: string
+        targetType:
+          type: string
+          enum:
+          - post
+          - comment
+        targetId:
+          type: string
+        authorId:
+          type: string
+          nullable: true
+        author:
+          $ref: '#/components/schemas/AuthorSummary'
+        status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - flagged
+          - admin_approved
+          - admin_removed
+        ruleViolated:
+          type: string
+          nullable: true
+          enum:
+          - harassment
+          - hate
+          - sexually_explicit
+          - spam
+        rationale:
+          type: string
+          description: AI's written explanation of its moderation decision
+        content:
+          type: object
+          description: 'For posts: {caption, imageUrl, supportersOnly}. For comments:
+            {text}.'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Member:
+      type: object
+      required:
+      - userId
+      - displayName
+      - avatarUrl
+      - joinedAt
+      - followerCount
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        followerCount:
+          type: integer
+          minimum: 0
+    Profile:
+      type: object
+      required:
+      - _id
+      - userId
+      - username
+      - name
+      - bio
+      - bioImageUrl
+      - createdAt
+      - updatedAt
+      properties:
+        _id:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        name:
+          type: string
+        bio:
+          type: string
+        bioImageUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Notification:
+      type: object
+      required:
+      - _id
+      - recipient
+      - actorId
+      - type
+      - read
+      - createdAt
+      properties:
+        _id:
+          type: string
+        recipient:
+          type: string
+        actorId:
+          type: string
+        actor:
+          type: object
+          nullable: true
+          required:
+          - _id
+          - username
+          - name
+          properties:
+            _id:
+              type: string
+            username:
+              type: string
+            name:
+              type: string
+            bioImageUrl:
+              type: string
+        type:
+          type: string
+          enum:
+          - like
+          - comment
+          - follow
+        targetPostId:
+          type: string
+          nullable: true
+          description: set for like/comment notifications; null for follow notifications
+        targetPost:
+          type: object
+          nullable: true
+          description: Hydrated target post (caption + image only) for like/comment
+            notifications. imageUrl is null when the post is locked for the viewer.
+            null for follow notifications.
+          required:
+          - _id
+          properties:
+            _id:
+              type: string
+            caption:
+              type: string
+            imageUrl:
+              type: string
+              nullable: true
+        content:
+          type: object
+          additionalProperties: true
+          description: Original Notifying.content payload (kept for extensibility)
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: string
+    AuthorSummary:
+      type: object
+      nullable: true
+      description: Hydrated author display data. null when the post/comment is anonymized.
+      required:
+      - _id
+      - username
+      - name
+      properties:
+        _id:
+          type: string
+        username:
+          type: string
+        name:
+          type: string
+        bioImageUrl:
+          type: string
+    Like:
+      type: object
+      required:
+      - _id
+      - item
+      - user
+      - createdAt
+      properties:
+        _id:
+          type: string
+        item:
+          type: string
+        user:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Comment:
+      type: object
+      required:
+      - _id
+      - item
+      - authorId
+      - author
+      - content
+      - isOwner
+      - moderationStatus
+      - moderationRuleViolated
+      - createdAt
+      - updatedAt
+      properties:
+        _id:
+          type: string
+        item:
+          type: string
+          description: The post ID this comment belongs to
+        authorId:
+          type: string
+          nullable: true
+        author:
+          $ref: '#/components/schemas/AuthorSummary'
+        content:
+          type: string
+        isOwner:
+          type: boolean
+        moderationStatus:
+          type: string
+          enum:
+          - pending
+          - approved
+          - flagged
+          - admin_approved
+          - admin_removed
+          description: Moderation state resolved from ModerationReview._getLatestForTarget("comment",
+            commentId)
+        moderationRuleViolated:
+          type: string
+          nullable: true
+          enum:
+          - harassment
+          - hate
+          - sexually_explicit
+          - spam
+          description: Which community guideline was violated, if moderationStatus
+            is "flagged"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Me:
+      type: object
+      required:
+      - userId
+      - email
+      - isAdmin
+      properties:
+        userId:
+          type: string
+        email:
+          type: string
+          format: email
+        isAdmin:
+          type: boolean
+          description: true when the current session's principal satisfies AdminAuthenticating._isAdmin
+    User:
+      type: object
+      required:
+      - _id
+      - email
+      - createdAt
+      - updatedAt
+      properties:
+        _id:
+          type: string
+        email:
+          type: string
+          format: email
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Follow:
+      type: object
+      required:
+      - _id
+      - follower
+      - followee
+      - createdAt
+      properties:
+        _id:
+          type: string
+        follower:
+          type: string
+        followee:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+paths:
+  /auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register a new user account (auto-issues session tokens)
+      security: []
+      description: "PURPOSE: Create a new user account and immediately establish\n\
+        \ a JWT session so the next request (POST /me/profile) has a valid bearer\n\
+        \ token. Without this, the onboarding sequence in the app graph\n (register\
+        \ → create_profile) would 401 on the profile submit.\nCONCEPTS: Authenticating,\
+        \ Sessioning.\nACTIONS: Calls Authenticating.register(email, password)\n \
+        \ then Sessioning.create(user).\nSIDE EFFECTS: New active Session row with\
+        \ refresh-token jti\n  and access-token jti.\nPREREQUISITES: Public (no auth\
+        \ required). Email must not already exist.\nRESPONSE: { user: User, accessToken,\
+        \ refreshToken }\nERRORS: 400 \"email already registered\"; 400 \"invalid\
+        \ email format\";\n  400 \"password must be 8–128 characters\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+      responses:
+        '201':
+          description: User created and session established
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - user
+                - accessToken
+                - refreshToken
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Log in an existing user
+      security: []
+      description: 'PURPOSE: Authenticate and issue a JWT session pair.
+
+        CONCEPTS: Authenticating, Sessioning.
+
+        ACTIONS: Calls Authenticating.login(email, password) then Sessioning.create(user).
+
+        SIDE EFFECTS: New active Session row with refresh-token jti and access-token
+        jti.
+
+        PREREQUISITES: Public.
+
+        RESPONSE: { user: User, accessToken, refreshToken }
+
+        ERRORS: 401 "invalid credentials" (uniform — never reveals whether the email
+        exists).
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                password:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - user
+                - accessToken
+                - refreshToken
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Refresh session tokens
+      security: []
+      description: "PURPOSE: Exchange a valid refresh token for a new access/refresh\
+        \ pair.\nCONCEPTS: Sessioning.\nACTIONS: Calls Sessioning.refresh(refreshToken).\n\
+        SIDE EFFECTS: Old session marked status=\"revoked\"; new active session created.\n\
+        PREREQUISITES: Refresh token must be signature-valid, unexpired, type=\"refresh\"\
+        ,\n  and the associated session must be status=\"active\".\nRESPONSE: { accessToken,\
+        \ refreshToken }\nERRORS: 401 \"invalid or expired refresh token\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - accessToken
+                - refreshToken
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: End the current session
+      description: "PURPOSE: Revoke the current access-token session.\nCONCEPTS: Sessioning.\n\
+        ACTIONS: Calls Sessioning.delete(accessToken).\nSIDE EFFECTS: Session marked\
+        \ status=\"revoked\"; refresh token invalidated.\nPREREQUISITES: Valid bearer\
+        \ access token.\nRESPONSE: { ok: true }\nERRORS: 401 invalid session (likely\
+        \ already logged out — frontend should\n  still redirect to login).\n"
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+  /auth/reset-password:
+    post:
+      tags:
+      - Authentication
+      summary: Reset password with current credentials
+      security: []
+      description: "PURPOSE: Change own password by providing old and new.\nCONCEPTS:\
+        \ Authenticating.\nACTIONS: Calls Authenticating.resetPassword(email, oldPassword,\
+        \ newPassword).\nSIDE EFFECTS: Password hash updated. Existing sessions are\
+        \ NOT invalidated.\nPREREQUISITES: None (public). User must know the current\
+        \ password.\nRESPONSE: { ok: true }\nERRORS: 401 \"invalid old password\"\
+        ; 404 \"user not found\";\n  400 \"password must be 8–128 characters\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - oldPassword
+              - newPassword
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                oldPassword:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                newPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+  /admin/login:
+    post:
+      tags:
+      - Admin
+      summary: Admin login with environment-configured credentials
+      security: []
+      description: "PURPOSE: Authenticate the site operator using ADMIN_EMAIL/ADMIN_PASSWORD\
+        \ env vars.\nCONCEPTS: AdminAuthenticating, Sessioning.\nACTIONS: Calls AdminAuthenticating.login(email,\
+        \ password) then Sessioning.create(admin).\nSIDE EFFECTS: New session bound\
+        \ to the admin principal id.\nPREREQUISITES: Public. Credentials are verified\
+        \ constant-time against\n  the env config; in mock mode ANY submitted credentials\
+        \ succeed; if env\n  not configured in LIVE mode EVERY login fails.\nRESPONSE:\
+        \ { admin: AdminPrincipal, accessToken, refreshToken }\nERRORS: 401 \"invalid\
+        \ credentials\"; 503 \"admin not configured\".\nNOTE: The plan's form field\
+        \ is \"username\" — it maps to the concept's\n  `email` parameter (admin is\
+        \ identified by email in the env).\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+                password:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+      responses:
+        '200':
+          description: Admin login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - admin
+                - accessToken
+                - refreshToken
+                properties:
+                  admin:
+                    $ref: '#/components/schemas/AdminPrincipal'
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Admin not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/profile:
+    get:
+      tags:
+      - Profile
+      summary: Get own profile with follower counts and subscription badge
+      description: "PURPOSE: Retrieve the current user's own profile.\nCONCEPTS: Profiling,\
+        \ Following, Subscribing.\nACTIONS: Calls Profiling._getProfile(user), Following._getFollowerCount(user),\n\
+        \  Following._getFollowingCount(user), Subscribing._hasActiveAccess(user).\n\
+        SIDE EFFECTS: None.\nPREREQUISITES: Valid bearer access token.\nRESPONSE:\
+        \ { profile, followerCount, followingCount, hasActiveSubscription }.\nERRORS:\
+        \ 404 with { error } when profile has not been created yet\n  (expected for\
+        \ users who haven't completed onboarding — frontend should\n  NOT treat this\
+        \ as an auth failure and logout).\n"
+      responses:
+        '200':
+          description: Profile found
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - profile
+                - followerCount
+                - followingCount
+                - hasActiveSubscription
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/Profile'
+                  followerCount:
+                    type: integer
+                    minimum: 0
+                  followingCount:
+                    type: integer
+                    minimum: 0
+                  hasActiveSubscription:
+                    type: boolean
+        '404':
+          description: Profile not yet created (new user before onboarding completes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Profile
+      summary: Create own profile (onboarding step after registration)
+      description: "PURPOSE: Onboarding step — create the public profile.\nCONCEPTS:\
+        \ Profiling, MembershipListing (side-effect sync).\nACTIONS: Calls Profiling.createProfile(user,\
+        \ username, name, bio, bioImageUrl).\nSIDE EFFECTS: Sync calls MembershipListing.record(user,\
+        \ name, bioImageUrl,\n  now, 0) so the Admin Dashboard \"Recent members\"\
+        \ list includes this user.\nPREREQUISITES: Valid bearer access token. bioImageUrl\
+        \ must be a URL\n  returned from POST /media/upload (or empty string for no\
+        \ avatar).\nRESPONSE: { profile: Profile }\nERRORS: 400 \"username taken\"\
+        ; 400 \"username must match pattern\";\n  400 \"name required\"; 400 \"username\
+        \ required\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - username
+              - name
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 30
+                  pattern: ^[a-zA-Z0-9_-]+$
+                  description: Unique profile handle.
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+                bio:
+                  type: string
+                  maxLength: 500
+                bioImageUrl:
+                  type: string
+                  maxLength: 2048
+                  description: Avatar URL from POST /media/upload, or empty string
+      responses:
+        '201':
+          description: Profile created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - profile
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/Profile'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+      - Profile
+      summary: Update own profile
+      description: "PURPOSE: Update display name, bio, avatar, or username.\nCONCEPTS:\
+        \ Profiling, MembershipListing (side-effect sync).\nACTIONS: Calls Profiling.updateProfile(user,\
+        \ username?, name?, bio?, bioImageUrl?).\nSIDE EFFECTS: If name or bioImageUrl\
+        \ changes, sync calls\n  MembershipListing.updateFromProfile(user, name, bioImageUrl)\
+        \ so the\n  admin dashboard reflects the change.\nPREREQUISITES: Valid bearer\
+        \ access token. bioImageUrl must be a URL\n  returned from POST /media/upload.\n\
+        RESPONSE: { profile: Profile }\nERRORS: 400 \"username taken\"; 400 \"username\
+        \ must match pattern\";\n  400 \"at least one field required\"; 404 \"profile\
+        \ not found\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 30
+                  pattern: ^[a-zA-Z0-9_-]+$
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+                bio:
+                  type: string
+                  maxLength: 500
+                bioImageUrl:
+                  type: string
+                  maxLength: 2048
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - profile
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/Profile'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Profile not yet created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me:
+    get:
+      tags:
+      - Profile
+      summary: Get the current session's principal, email, and admin flag
+      description: "PURPOSE: Return the current session's principal, email, and\n\
+        \ admin flag. Single endpoint that lets the frontend decide admin-only\n UI\
+        \ affordances (e.g. Post Detail's \"Admin Remove Post\" button via\n the graph\
+        \ edge with condition isAdmin) AND renders the Settings page's\n \"Account\
+        \ information (email)\" field without depending on the Profile\n schema (which\
+        \ carries userId, not email).\nCONCEPTS: Authenticating, AdminAuthenticating.\n\
+        ACTIONS:\n  1. Sessioning._getUser(accessToken) → user (resolved session principal)\n\
+        \  2. Authenticating._getUserById(user) → user, email\n  3. AdminAuthenticating._isAdmin(user)\
+        \ → isAdmin\nSIDE EFFECTS: None.\nPREREQUISITES: Valid bearer access token.\n\
+        RESPONSE: { userId, email, isAdmin }\nERRORS: 401 invalid session.\n"
+      responses:
+        '200':
+          description: Current session info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          description: Invalid session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Profile
+      summary: Delete own account (full cascade)
+      description: "PURPOSE: Permanently delete own account and all owned data.\n\
+        CONCEPTS: Posting, Commenting, Liking, Following, Notifying, Profiling,\n\
+        \  Authenticating, Sessioning, Subscribing, Feed, MembershipListing,\n  ModerationReview,\
+        \ AIModeration.\nACTIONS (server-side, in order):\n  1. Posting.anonymizeByAuthor(user)\
+        \ — preserves other users' comment/like history\n  2. Commenting.anonymizeByAuthor(user)\
+        \ — preserves content on others' posts\n  3. Liking.deleteByUser(user) — hard-delete\
+        \ user's likes\n  4. Following.deleteByFollower(user) + Following.deleteByFollowed(user)\
+        \ — clean both sides\n  5. Notifying.deleteByRecipient(user) — drop notifications\
+        \ targeted at user\n  6. ModerationReview.deleteByAuthor(user) — remove all\
+        \ moderation reviews for user's content\n  7. AIModeration.deleteAllPoliciesForOwner(user)\
+        \ — remove any policies owned by user\n  8. Profiling.deleteProfile(user)\
+        \ — drop profile\n  9. MembershipListing.removeByUser(user) — drop member\
+        \ row\n  10. Subscribing.deleteByOwner(user) — best-effort cancel any active\
+        \ sub at Stripe + drop local rows\n  11. Feed.deleteByViewer(user) + Feed.deleteBySourceForAll(user)\
+        \ — wipe own feed + drop source from others\n  12. Authenticating.deleteAuthenticationByUser(user)\
+        \ — drop auth row\n  13. Sessioning.deleteByUser(user) — revoke all sessions\n\
+        SIDE EFFECTS: Posts and comments authored by this user are ANONYMIZED\n  (author\
+        \ field cleared to null), preserving content — including their images —\n\
+        \  visible to other users; likes/follows/sessions/auth are hard-deleted.\n\
+        \  Moderation reviews for the user's content are removed.\n  MediaHosting.deleteByUploader\
+        \ is intentionally NOT called so that image URLs\n  referenced by anonymized\
+        \ posts remain accessible to other users.\nPREREQUISITES: Valid bearer access\
+        \ token.\nRESPONSE: { ok: true } (frontend should drop tokens and redirect\
+        \ to /login)\nERRORS: 401 invalid session. Concept-level deleteBy* actions\
+        \ are\n  idempotent, so cascade retries are safe.\n"
+      responses:
+        '200':
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+  /profiles/{userId}:
+    get:
+      tags:
+      - Profile
+      summary: Get another user's public profile
+      description: "PURPOSE: View another user's profile with post grid and follower\
+        \ counts.\nCONCEPTS: Profiling, Following, Posting, Subscribing, Liking, Commenting,\n\
+        \  ModerationReview (content-visibility gate).\nACTIONS: Calls Profiling._getProfile(userId),\
+        \ Following._getFollowerCount(userId),\n  Following._getFollowingCount(userId),\
+        \ Following._isFollowing(viewer, userId),\n  Posting._getPostsByAuthor(userId,\
+        \ limit), Subscribing._hasActiveAccess(viewer);\n  then per post: ModerationReview._getLatestForTarget(\"\
+        post\", postId) → moderation\n  status. EXCLUDE posts whose moderationStatus\
+        \ is \"pending\", \"flagged\", or\n  \"admin_removed\" — only \"approved\"\
+        \ and \"admin_approved\" posts are visible to\n  non-authors. (When viewer\
+        \ IS the author, all statuses are shown — but this\n  endpoint is for viewing\
+        \ OTHER users' profiles; own profile uses GET /me/profile +\n  GET /me/posts.)\
+        \ Then per visible post: Liking._countForItem and\n  Commenting._getCommentCount,\
+        \ with Liking._likedAmong([ids], viewer) for isLiked.\nSIDE EFFECTS: None.\n\
+        PREREQUISITES: Valid bearer access token.\nRESPONSE: { profile, followerCount,\
+        \ followingCount, isFollowing, posts }.\n  posts are paginated and respect\
+        \ supporters-only gating for non-supporters.\n  Only moderation-approved posts\
+        \ are included.\nERRORS: 404 \"user not found\" when no profile exists for\
+        \ the userId.\n"
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 30
+      responses:
+        '200':
+          description: Profile found
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - profile
+                - followerCount
+                - followingCount
+                - isFollowing
+                - posts
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/Profile'
+                  followerCount:
+                    type: integer
+                    minimum: 0
+                  followingCount:
+                    type: integer
+                    minimum: 0
+                  isFollowing:
+                    type: boolean
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /profiles/by-username/{username}:
+    get:
+      tags:
+      - Profile
+      summary: Get a user's public profile by username
+      description: "PURPOSE: Resolve a username to a profile (same data as GET /profiles/{userId}).\n\
+        CONCEPTS: Profiling, Following, Posting, Subscribing, Liking, Commenting,\n\
+        \  ModerationReview (content-visibility gate).\nACTIONS: Calls Profiling._getProfileByUsername(username),\
+        \ then the same\n  hydration pipeline as GET /profiles/{userId} using the\
+        \ resolved userId.\n  Moderation gate: excludes posts whose ModerationReview\
+        \ status is \"pending\",\n  \"flagged\", or \"admin_removed\" — only \"approved\"\
+        \ and \"admin_approved\"\n  posts are visible.\nSIDE EFFECTS: None.\nPREREQUISITES:\
+        \ Valid bearer access token.\nRESPONSE: { profile, followerCount, followingCount,\
+        \ isFollowing, posts }.\nERRORS: 404 \"user not found\" when no profile has\
+        \ the given username.\n"
+      parameters:
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 3
+          maxLength: 30
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 30
+      responses:
+        '200':
+          description: Profile found
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - profile
+                - followerCount
+                - followingCount
+                - isFollowing
+                - posts
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/Profile'
+                  followerCount:
+                    type: integer
+                    minimum: 0
+                  followingCount:
+                    type: integer
+                    minimum: 0
+                  isFollowing:
+                    type: boolean
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /profiles/search:
+    get:
+      tags:
+      - Profile
+      summary: Search users by display name or username
+      description: "PURPOSE: Find users to follow.\nCONCEPTS: Profiling.\nACTIONS:\
+        \ Calls Profiling._searchProfiles(query) → case-insensitive\n  partial match\
+        \ on username OR name.\nSIDE EFFECTS: None.\nPREREQUISITES: Valid bearer access\
+        \ token.\nRESPONSE: { profiles: [Profile, ...] } ordered by relevance/match.\n\
+        ERRORS: 400 when query is empty or too long.\n"
+      parameters:
+      - name: query
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 60
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      responses:
+        '200':
+          description: Matching profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - profiles
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+  /media/upload:
+    post:
+      tags:
+      - Media
+      summary: Upload an image file (avatar or post photo)
+      description: "PURPOSE: Upload a file and return its canonical URL.\nCONCEPTS:\
+        \ MediaHosting.\nACTIONS: Calls MediaHosting.upload(uploader=user, fileData,\
+        \ mimeType,\n  fileName, accessPolicy=\"public\").\nSIDE EFFECTS: Stores bytes\
+        \ in chunked storage and writes a MediaFile\n  metadata row; returns a canonical\
+        \ /media/{id} URL.\nPREREQUISITES: Valid bearer access token. File ≤200MB.\
+        \ MIME type must be\n  supported (image/*, video/*, audio/*, text/*, plus\
+        \ the explicit allow-set\n  in the concept). For this app use image/* — avatars\
+        \ and post photos.\nRESPONSE: { media: Media } — pass the returned `url` as\
+        \ bioImageUrl on\n  POST /me/profile or as imageUrl (inside content) on POST\
+        \ /posts.\nERRORS: 400 \"file too large\"; 400 \"unsupported mime type\";\n\
+        \  400 \"empty file\".\n"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              - mimeType
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image bytes (any image/* mime)
+                mimeType:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: MIME type matching the uploaded file
+                fileName:
+                  type: string
+                  maxLength: 255
+                  description: Optional original filename
+      responses:
+        '201':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - media
+                properties:
+                  media:
+                    $ref: '#/components/schemas/Media'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /posts:
+    post:
+      tags:
+      - Posts
+      summary: Create a new post (with AI moderation screening)
+      description: "PURPOSE: Create a post with a previously-uploaded photo and caption,\n\
+        \  optionally marked supporters-only. The post is screened by automated AI\n\
+        \  moderation before becoming visible in feeds.\nCONCEPTS: Posting, Feed (side-effect\
+        \ fan-out), Following (queried for fan-out),\n  ModerationReview, AIModeration.\n\
+        ACTIONS:\n  1. Posting.createPost(author=user, content={caption, imageUrl,\
+        \ supportersOnly}, type=\"image\")\n  2. ModerationReview.record(targetType=\"\
+        post\", targetId=postId, authorId=user) → reviewId\n  3. Resolve the platform\
+        \ moderation policy:\n     - AIModeration._listPoliciesForOwner(systemOwner)\
+        \ → check for existing policy\n     - If none exists: AIModeration.createPolicy(owner=systemOwner,\
+        \ name=\"Community Guidelines\",\n       policyText=<community guidelines\
+        \ text describing harassment, hate, sexually explicit material, spam>)\n \
+        \    - Use the resolved policyId\n  4. AIModeration.moderate(policy=policyId,\
+        \ item=postId, content={caption, imageUrl})\n     → returns { moderationResultId,\
+        \ verdict } or { error }\n  5. If error: post stays moderationStatus=\"pending\"\
+        \ (AI moderation failed —\n     post remains hidden until retried or admin\
+        \ review)\n  6. If verdict=true (approved):\n     - ModerationReview.applyVerdict(review=reviewId,\
+        \ status=\"approved\")\n     - Following._following(user) → list of follower\
+        \ userIds\n     - For each follower: Feed.fanoutEntry([follower], user, postId,\
+        \ now,\n       {caption, imageUrl, supportersOnly, authorId:user})\n  7. If\
+        \ verdict=false (flagged):\n     - AIModeration._getModerationResult(moderationResultId)\
+        \ → get rationale\n     - ModerationReview.applyVerdict(review=reviewId, status=\"\
+        flagged\",\n       ruleViolated=<extracted from rationale>, rationale=<AI\
+        \ written explanation>)\n     - Do NOT fan out to feeds (post is hidden from\
+        \ all feeds)\nAI PROMPTING CONTRACT: The moderation policy text must instruct\
+        \ the AI to\n  screen the submitted text content (caption) against four community\
+        \ guidelines:\n  harassment, hate, sexually_explicit, spam. The AI must return\
+        \ verdict=true\n  if the content passes (no violation) or verdict=false if\
+        \ it violates any\n  rule. The AI's rationale must clearly name which of the\
+        \ four rules was\n  violated so the sync can extract the ruleViolated value.\
+        \ The content object\n  passed to moderate is {caption, imageUrl} — the AI\
+        \ analyzes the caption text;\n  imageUrl is included for context but the AI\
+        \ primarily screens text.\nSIDE EFFECTS: ModerationReview row created; if\
+        \ approved, post fans out to all\n  followers' Home Feeds; if flagged, post\
+        \ is hidden from feeds.\nPREREQUISITES: Valid bearer access token. imageUrl\
+        \ must be a URL\n  returned from POST /media/upload.\nRESPONSE: { post: Post\
+        \ } with moderationStatus set to \"approved\",\n  \"flagged\", or \"pending\"\
+        \ depending on AI verdict. isLocked=false,\n  isLiked=false, likeCount=0,\
+        \ commentCount=0, isOwner=true.\n  If moderationStatus is \"flagged\", moderationRuleViolated\
+        \ indicates which\n  community guideline was broken.\nERRORS: 400 \"caption\
+        \ required\"; 400 \"imageUrl required\";\n  400 \"imageUrl must be a media\
+        \ URL\"; 400 \"supportersOnly must be boolean\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - caption
+              - imageUrl
+              properties:
+                caption:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                imageUrl:
+                  type: string
+                  maxLength: 2048
+                  description: URL returned by POST /media/upload
+                supportersOnly:
+                  type: boolean
+                  default: false
+                  description: When true, non-supporters see a locked placeholder
+                    for the image.
+      responses:
+        '201':
+          description: Post created (moderation status reflects AI screening result)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - post
+                properties:
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /posts/{postId}:
+    get:
+      tags:
+      - Posts
+      summary: Get a single post with comments, like state, and moderation status
+      description: "PURPOSE: View a post's detail page.\nCONCEPTS: Posting, Commenting,\
+        \ Liking, Subscribing, Profiling, Following,\n  ModerationReview (content-visibility\
+        \ gate).\nACTIONS:\n  1. Posting._getPost(postId)\n  2. ModerationReview._getLatestForTarget(\"\
+        post\", postId) → moderation status\n  3. VISIBILITY LOGIC:\n     - If moderationStatus\
+        \ is \"approved\" or \"admin_approved\": visible to all\n     - If moderationStatus\
+        \ is \"pending\" or \"flagged\": visible ONLY to the\n       author (show\
+        \ pending/blocked message with ruleViolated). If viewer is\n       NOT the\
+        \ author → return 404 (not accessible)\n     - If moderationStatus is \"admin_removed\"\
+        : return 404 for everyone\n  4. If authorId is null (anonymized): render \"\
+        [deleted]\" — author = null\n  5. Subscribing._hasActiveAccess(viewer) → gate\n\
+        \  6. If supportersOnly AND not hasActiveAccess AND viewer is not the author:\n\
+        \     imageUrl is nulled out and isLocked=true (caption + comments remain\
+        \ visible)\n  7. Liking._isLiked(postId, viewer) → isLiked\n  8. Liking._countForItem(postId)\
+        \ → likeCount\n  9. Commenting._getComments(postId) → comments (newest first)\n\
+        \ 10. For each comment: ModerationReview._getLatestForTarget(\"comment\",\
+        \ commentId)\n      → filter: only show \"approved\" and \"admin_approved\"\
+        \ comments to non-authors.\n      Show \"flagged\" and \"pending\" comments\
+        \ only to the comment's author.\n      Exclude \"admin_removed\" comments\
+        \ entirely.\n  11. Profiling._getProfile(authorId) → author\n  12. Profiling._getProfilesByIds(comment.authorIds)\
+        \ → comment authors\nSIDE EFFECTS: None.\nPREREQUISITES: Valid bearer access\
+        \ token.\nRESPONSE: { post, comments }.\n  - post.moderationStatus and post.moderationRuleViolated\
+        \ are always set\n  - comments only include moderation-approved ones for non-authors;\n\
+        \    comment authors see their own flagged/pending comments with\n    moderationRuleViolated\
+        \ shown\nERRORS: 404 \"post not found\" (covers both missing post and\n  non-author\
+        \ viewing blocked/pending/admin_removed content).\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Post found
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - post
+                - comments
+                properties:
+                  post:
+                    $ref: '#/components/schemas/Post'
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Posts
+      summary: Delete own post with full cascade
+      description: "PURPOSE: Delete own post and all derived data.\nCONCEPTS: Posting,\
+        \ Commenting, Liking, Notifying, Feed, MediaHosting,\n  ModerationReview,\
+        \ AIModeration.\nACTIONS (server-side, in order; each step is idempotent):\n\
+        \  1. Posting._getPost(postId) → verify authorId == session user (else 403)\n\
+        \  2. Posting.deletePost(postId, author=user)\n  3. Commenting.deleteByItem(postId)\
+        \ — drop comments\n  4. Liking.deleteByItem(postId) — drop likes\n  5. Notifying.deleteByTrigger(postId)\
+        \ — drop notifications triggered by this post\n  6. Feed.removeItem(postId)\
+        \ — drop from every viewer's feed\n  7. ModerationReview.deleteByTarget(\"\
+        post\", postId) — drop moderation review\n  8. MediaHosting.delete(imageId,\
+        \ user) — free storage (best-effort)\nSIDE EFFECTS: All derived data for this\
+        \ post is removed, including its\n  ModerationReview row.\nPREREQUISITES:\
+        \ Valid bearer access token. The post must be authored by\n  the current user.\n\
+        RESPONSE: { ok: true }\nERRORS: 403 \"not your post\"; 404 \"post not found\"\
+        .\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Post deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '403':
+          description: Not your post
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /feed/home:
+    get:
+      tags:
+      - Feed
+      summary: Home feed — posts from followed users (moderation-approved only)
+      description: "PURPOSE: Render the Home Feed (default landing for logged-in users).\n\
+        CONCEPTS: Feed, Subscribing, Profiling, Liking, Commenting, Following,\n \
+        \ ModerationReview (content-visibility gate — posts are only fanned out on\n\
+        \ approval, so the materialized feed inherently excludes flagged/pending content).\n\
+        ACTIONS:\n  1. Feed._getFeed(viewer, limit, before) → entries (newest first)\n\
+        \  2. Subscribing._hasActiveAccess(viewer) → gate\n  3. For each entry, if\
+        \ payload.supportersOnly AND !hasActiveAccess:\n     imageUrl is nulled and\
+        \ isLocked=true (owner still sees in full).\n  4. ModerationReview._getLatestForTarget(\"\
+        post\", postId) for each entry → resolve\n     moderationStatus and moderationRuleViolated.\
+        \ Posts in the feed should already\n     be approved (fan-out only happens\
+        \ on approval), but the status is included\n     for completeness.\n  5. Profiling._getProfilesByIds([entry.source\
+        \ for each entry]) → author batch\n  6. Liking._likedAmong([entry.item], viewer)\
+        \ → isLiked per post\n  7. Liking._countForItems([entry.item]) → likeCount\
+        \ per post\n  8. Commenting._getCommentsByItems([entry.item]) → groups; commentCount\
+        \ = length\nSIDE EFFECTS: None.\nPREREQUISITES: Valid bearer access token.\n\
+        RESPONSE: { posts: [Post, ...], nextCursor } — newest-first paginated.\n \
+        \ Each post includes moderationStatus (expected to be \"approved\" or\n  \"\
+        admin_approved\"). Empty array means the user follows no one\n  (frontend\
+        \ shows a \"Visit Discover\" empty state).\nERRORS: 401 invalid session.\n"
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: date-time
+          description: Cursor — return entries strictly older than this createdAt
+      responses:
+        '200':
+          description: Home feed entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  nextCursor:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: Pass as `before` for the next page. null when no
+                      more entries.
+  /feed/discover:
+    get:
+      tags:
+      - Feed
+      summary: Discover feed — recent approved posts from ALL users
+      description: "PURPOSE: Render the Discover Feed.\nCONCEPTS: Posting, Subscribing,\
+        \ Profiling, Liking, Commenting,\n  ModerationReview (content-visibility gate\
+        \ — excludes non-approved posts).\nACTIONS:\n  1. Posting._allPosts(limit,\
+        \ skip) → posts (newest first; includes anonymized)\n  2. For each post: ModerationReview._getLatestForTarget(\"\
+        post\", postId)\n     → EXCLUDE posts whose moderationStatus is \"pending\"\
+        , \"flagged\", or\n     \"admin_removed\". Only \"approved\" and \"admin_approved\"\
+        \ posts appear.\n  3. Subscribing._hasActiveAccess(viewer) → gate\n  4. Apply\
+        \ supporters-only gating for non-supporters (image nulled + isLocked=true).\n\
+        \     Anonymized posts (authorId == null) render with author=null.\n  5. Profiling._getProfilesByIds([post.authorId\
+        \ for non-null]) → authors\n  6. Liking._likedAmong([post._id], viewer) →\
+        \ isLiked\n  7. Liking._countForItems([post._id]) → likeCount\n  8. Commenting._getCommentsByItems([post._id])\
+        \ → groups; commentCount = length\nSIDE EFFECTS: None.\nPREREQUISITES: Valid\
+        \ bearer access token.\nRESPONSE: { posts: [Post, ...], nextCursor } — newest-first\
+        \ paginated\n  by offset (skip). nextCursor is an integer (next skip) or null\
+        \ when exhausted.\n  Only moderation-approved posts are included.\nERRORS:\
+        \ 401 invalid session.\n"
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: skip
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Discover posts
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  nextCursor:
+                    type: integer
+                    nullable: true
+                    description: Next skip value, or null when no more posts.
+  /me/posts:
+    get:
+      tags:
+      - Posts
+      summary: Get own posts with moderation status indicators (My Posts list)
+      description: "PURPOSE: List current user's own posts including ALL moderation\
+        \ statuses\n  (approved, pending, flagged, admin_approved) with visual status\
+        \ indicators.\n  No supporters-only gating — owner always sees in full.\n\
+        CONCEPTS: Posting, Liking, Commenting, Profiling, ModerationReview.\nACTIONS:\n\
+        \  1. Posting._getPostsByAuthor(user, limit, skip)\n  2. For each post: ModerationReview._getLatestForTarget(\"\
+        post\", postId)\n     → resolve moderationStatus and moderationRuleViolated\n\
+        \  3. Liking._likedAmong + Liking._countForItems (always true, always 1 author)\n\
+        \  4. Commenting._getCommentsByItems → commentCount per post\nSIDE EFFECTS:\
+        \ None.\nPREREQUISITES: Valid bearer access token.\nRESPONSE: { posts: [Post,\
+        \ ...], nextCursor }.\n  Each post includes moderationStatus and moderationRuleViolated\
+        \ so the\n  frontend can show status badges (approved, pending, blocked) and\
+        \ which\n  community guideline was violated for flagged posts.\nERRORS: 401\
+        \ invalid session.\n"
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 30
+      - name: skip
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Own posts
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  nextCursor:
+                    type: integer
+                    nullable: true
+  /users/{userId}/posts:
+    get:
+      tags:
+      - Posts
+      summary: Get a specific user's posts (moderation-approved only for non-authors)
+      description: "PURPOSE: List another user's posts (respects supporters-only gating\n\
+        \  unless the viewer is the author). Only moderation-approved posts are\n\
+        \  visible to non-authors.\nCONCEPTS: Posting, Liking, Commenting, Profiling,\
+        \ Subscribing,\n  ModerationReview (content-visibility gate).\nACTIONS: Same\
+        \ as /feed/discover but scoped to a single author via\n  Posting._getPostsByAuthor(userId,\
+        \ limit, skip).\n  Moderation gate: For each post, ModerationReview._getLatestForTarget(\"\
+        post\", postId)\n  → exclude posts whose status is \"pending\", \"flagged\"\
+        , or \"admin_removed\".\n  Only \"approved\" and \"admin_approved\" posts\
+        \ are included for non-authors.\n  If viewer IS the author, all statuses are\
+        \ shown (same as GET /me/posts).\nSIDE EFFECTS: None.\nPREREQUISITES: Valid\
+        \ bearer access token.\nRESPONSE: { posts: [Post, ...], nextCursor }.\nERRORS:\
+        \ 401 invalid session.\n"
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 30
+      - name: skip
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: User's posts
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  nextCursor:
+                    type: integer
+                    nullable: true
+  /posts/{postId}/comments:
+    get:
+      tags:
+      - Comments
+      summary: List comments on a post (moderation-approved only, except author's
+        own)
+      description: "PURPOSE: Load comments for the post detail page.\nCONCEPTS: Commenting,\
+        \ Profiling, ModerationReview (content-visibility gate).\nACTIONS:\n  1. Commenting._getComments(postId)\
+        \ → comments (newest first; includes anonymized with author=null)\n  2. For\
+        \ each comment: ModerationReview._getLatestForTarget(\"comment\", commentId)\n\
+        \     → resolve moderationStatus and moderationRuleViolated\n  3. FILTER:\
+        \ Only include comments whose moderationStatus is \"approved\" or\n     \"\
+        admin_approved\". Additionally, if the current viewer is the author of a\n\
+        \     comment with status \"pending\" or \"flagged\", include that comment\
+        \ too\n     (so the author sees their own blocked content with the violation\
+        \ message).\n     Exclude \"admin_removed\" comments entirely.\n  4. Profiling._getProfilesByIds([authorId\
+        \ for each non-null]) → author batch\nSIDE EFFECTS: None.\nPREREQUISITES:\
+        \ Valid bearer access token.\nRESPONSE: { comments: [Comment, ...] }.\n  Each\
+        \ comment includes moderationStatus and moderationRuleViolated. Non-author\n\
+        \  viewers only see approved/admin_approved comments. Comment authors see\n\
+        \  their own flagged/pending comments with the violated rule indicated.\n\
+        ERRORS: 404 \"post not found\".\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - comments
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+    post:
+      tags:
+      - Comments
+      summary: Post a comment on a post (with AI moderation screening)
+      description: "PURPOSE: Add a comment and notify the post author. The comment\
+        \ is screened\n  by automated AI moderation before becoming publicly visible.\n\
+        CONCEPTS: Commenting, Notifying, Posting (for author lookup),\n  ModerationReview,\
+        \ AIModeration.\nACTIONS:\n  1. Posting._getPost(postId) → resolve post.authorId\n\
+        \  2. Commenting.postComment(item=postId, author=user, content=text) → commentId\n\
+        \  3. ModerationReview.record(targetType=\"comment\", targetId=commentId,\
+        \ authorId=user)\n     → reviewId\n  4. Resolve the platform moderation policy\
+        \ (same as POST /posts)\n  5. AIModeration.moderate(policy=policyId, item=commentId,\
+        \ content={text})\n     → returns { moderationResultId, verdict } or { error\
+        \ }\n  6. If error: comment stays moderationStatus=\"pending\"\n  7. If verdict=true\
+        \ (approved):\n     - ModerationReview.applyVerdict(review=reviewId, status=\"\
+        approved\")\n     - If post.authorId != user: Notifying.notify(recipient=post.authorId,\n\
+        \       trigger=postId, content={type:\"comment\", actorId:user, commentId,\
+        \ commentText},\n       type=\"comment\")\n  8. If verdict=false (flagged):\n\
+        \     - AIModeration._getModerationResult(moderationResultId) → rationale\n\
+        \     - ModerationReview.applyVerdict(review=reviewId, status=\"flagged\"\
+        ,\n       ruleViolated=<extracted from rationale>, rationale=<AI explanation>)\n\
+        \     - Do NOT notify the post author (comment is hidden)\nAI PROMPTING CONTRACT:\
+        \ The moderation policy text must instruct the AI to\n  screen the comment\
+        \ text against four community guidelines: harassment,\n  hate, sexually_explicit,\
+        \ spam. The AI must return verdict=true if the text\n  passes or verdict=false\
+        \ if it violates any rule. The rationale must name\n  the violated rule so\
+        \ the sync can extract the ruleViolated value.\nSIDE EFFECTS: Comment created;\
+        \ ModerationReview row created. If approved, post\n  author gets a notification.\
+        \ If flagged, comment is hidden from public view.\nPREREQUISITES: Valid bearer\
+        \ access token. Supporters-only gating does\n  NOT block commenting (only\
+        \ viewing the image).\nRESPONSE: { comment: Comment } with author hydrated\
+        \ and moderationStatus set\n  to \"approved\", \"flagged\", or \"pending\"\
+        . If flagged, moderationRuleViolated\n  indicates which community guideline\
+        \ was broken.\nERRORS: 400 \"text required\"; 400 \"text too long\";\n  404\
+        \ \"post not found\".\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - text
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+      responses:
+        '201':
+          description: Comment created (moderation status reflects AI screening result)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - comment
+                properties:
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /comments/{commentId}:
+    patch:
+      tags:
+      - Comments
+      summary: Edit own comment
+      description: "PURPOSE: Edit comment text.\nCONCEPTS: Commenting.\nACTIONS:\n\
+        \  1. Commenting._getComment(commentId) → verify author == user (else 403)\n\
+        \  2. Commenting.editComment(commentId, author=user, content=text)\nSIDE EFFECTS:\
+        \ Comment content + updatedAt updated.\nPREREQUISITES: Valid bearer access\
+        \ token. Must be the comment author.\nRESPONSE: { comment: Comment }.\nERRORS:\
+        \ 400 \"text required\"; 400 \"text too long\";\n  403 \"not your comment\"\
+        ; 404 \"comment not found\".\n"
+      parameters:
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - text
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+      responses:
+        '200':
+          description: Comment updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - comment
+                properties:
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Not your comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Comments
+      summary: Delete own comment (with moderation review cleanup)
+      description: "PURPOSE: Remove own comment and its moderation review.\nCONCEPTS:\
+        \ Commenting, ModerationReview.\nACTIONS:\n  1. Commenting._getComment(commentId)\
+        \ → verify author == user (else 403)\n  2. Commenting.deleteComment(commentId,\
+        \ author=user)\n  3. ModerationReview.deleteByTarget(\"comment\", commentId)\
+        \ — drop moderation review\nSIDE EFFECTS: Comment row and its ModerationReview\
+        \ row removed.\nPREREQUISITES: Valid bearer access token. Must be the comment\
+        \ author.\nRESPONSE: { ok: true }\nERRORS: 403 \"not your comment\"; 404 \"\
+        comment not found\".\n"
+      parameters:
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Comment deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '403':
+          description: Not your comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /posts/{postId}/like:
+    post:
+      tags:
+      - Likes
+      summary: Like a post
+      description: "PURPOSE: Record a like and notify the post author.\nCONCEPTS:\
+        \ Liking, Notifying, Posting (for author lookup).\nACTIONS:\n  1. Posting._getPost(postId)\
+        \ → resolve post.authorId (skip notify if user likes own post)\n  2. Liking.like(item=postId,\
+        \ user=user)\n  3. If author != user: Notifying.notify(recipient=post.authorId,\
+        \ trigger=postId,\n     content={type:\"like\", actorId:user}, type=\"like\"\
+        )\n  4. Liking._countForItem(postId) → likeCount for response\nSIDE EFFECTS:\
+        \ Like stored on (post,user). Author gets a notification\n  (only when the\
+        \ liker is someone else).\nPREREQUISITES: Valid bearer access token.\nRESPONSE:\
+        \ { like: Like, likeCount, isLiked: true }\nERRORS: 400 \"already liked\"\
+        ; 404 \"post not found\".\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Post liked
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - like
+                - likeCount
+                - isLiked
+                properties:
+                  like:
+                    $ref: '#/components/schemas/Like'
+                  likeCount:
+                    type: integer
+                    minimum: 0
+                  isLiked:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Already liked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Likes
+      summary: Unlike a post
+      description: "PURPOSE: Remove a like.\nCONCEPTS: Liking.\nACTIONS:\n  1. Liking.unlike(item=postId,\
+        \ user=user)\n  2. Liking._countForItem(postId) → likeCount for response\n\
+        SIDE EFFECTS: Like removed. The notification created at like-time is\n  intentionally\
+        \ NOT removed (per plan — keeps an audit trail).\nPREREQUISITES: Valid bearer\
+        \ access token.\nRESPONSE: { likeCount, isLiked: false }\nERRORS: 400 \"not\
+        \ liked\"; 404 \"post not found\".\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Post unliked
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - likeCount
+                - isLiked
+                properties:
+                  likeCount:
+                    type: integer
+                    minimum: 0
+                  isLiked:
+                    type: boolean
+                    enum:
+                    - false
+        '400':
+          description: Not liked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /posts/{postId}/likes:
+    get:
+      tags:
+      - Likes
+      summary: Get like state for a post
+      description: 'PURPOSE: Return like count and current viewer''s liked state.
+
+        CONCEPTS: Liking.
+
+        ACTIONS: Calls Liking._countForItem(postId) and Liking._isLiked(postId, viewer).
+
+        SIDE EFFECTS: None.
+
+        PREREQUISITES: Valid bearer access token.
+
+        RESPONSE: { likeCount, isLiked }
+
+        ERRORS: 404 "post not found".
+
+        '
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Like state
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - likeCount
+                - isLiked
+                properties:
+                  likeCount:
+                    type: integer
+                    minimum: 0
+                  isLiked:
+                    type: boolean
+  /users/{userId}/follow:
+    post:
+      tags:
+      - Follows
+      summary: Follow another user (backfill only approved posts to feed)
+      description: "PURPOSE: Create a follow edge, backfill own feed with the followed\n\
+        \  user's APPROVED posts, notify followed user.\nCONCEPTS: Following, Notifying,\
+        \ Feed (backfill side-effect), Posting,\n  ModerationReview (content-visibility\
+        \ gate — only approved posts are backfilled).\nACTIONS:\n  1. Following.follow(follower=user,\
+        \ followed=userId)\n  2. Notifying.notify(recipient=userId, trigger=user,\
+        \ content={type:\"follow\", actorId:user}, type=\"follow\")\n  3. Posting._getPostsByAuthor(userId,\
+        \ 50) → recent posts of the followed user\n  4. For each post: ModerationReview._getLatestForTarget(\"\
+        post\", postId)\n     → only backfill posts whose moderationStatus is \"approved\"\
+        \ or \"admin_approved\"\n  5. For each approved post: Feed.backfillFromSource(viewer=user,\
+        \ source=userId,\n     items=[{item:postId, createdAt, payload}]) — idempotent\n\
+        SIDE EFFECTS: Follow edge stored; followed user notified; user's Home\n  Feed\
+        \ is backfilled with the followed user's recent APPROVED posts only.\n  Flagged\
+        \ or pending posts are NOT backfilled.\nPREREQUISITES: Valid bearer access\
+        \ token. userId must differ from the\n  caller (concept enforces follower\
+        \ != followed).\nRESPONSE: { follow: Follow, isFollowing: true }\nERRORS:\
+        \ 400 \"cannot follow yourself\"; 400 \"already following\";\n  404 \"user\
+        \ not found\".\n"
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Followed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - follow
+                - isFollowing
+                properties:
+                  follow:
+                    $ref: '#/components/schemas/Follow'
+                  isFollowing:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Follows
+      summary: Unfollow another user
+      description: "PURPOSE: Remove follow edge and clean own feed.\nCONCEPTS: Following,\
+        \ Feed.\nACTIONS:\n  1. Following.unfollow(follower=user, followed=userId)\n\
+        \  2. Feed.removeBySource(viewer=user, source=userId) — removes every\n  \
+        \   entry that user received from userId\nSIDE EFFECTS: Follow edge removed;\
+        \ user's Home Feed no longer shows\n  posts from this source. No notification\
+        \ is sent on unfollow.\nPREREQUISITES: Valid bearer access token.\nRESPONSE:\
+        \ { isFollowing: false }\nERRORS: 400 \"not following\".\n"
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Unfollowed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - isFollowing
+                properties:
+                  isFollowing:
+                    type: boolean
+                    enum:
+                    - false
+        '400':
+          description: Not following
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/followers:
+    get:
+      tags:
+      - Follows
+      summary: Get own followers
+      description: "PURPOSE: List users following the current user.\nCONCEPTS: Following,\
+        \ Profiling.\nACTIONS: Calls Following._followers(user) → set of userIds;\n\
+        \  Profiling._getProfilesByIds(userIds) → profiles.\nSIDE EFFECTS: None.\n\
+        PREREQUISITES: Valid bearer access token.\nRESPONSE: { followers: [Profile,\
+        \ ...] }\nERRORS: 401 invalid session.\n"
+      responses:
+        '200':
+          description: Followers
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - followers
+                properties:
+                  followers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+  /me/following:
+    get:
+      tags:
+      - Follows
+      summary: Get users the current user follows
+      description: "PURPOSE: List users the current user follows.\nCONCEPTS: Following,\
+        \ Profiling.\nACTIONS: Calls Following._following(user) → set of userIds;\n\
+        \  Profiling._getProfilesByIds(userIds) → profiles.\nSIDE EFFECTS: None.\n\
+        PREREQUISITES: Valid bearer access token.\nRESPONSE: { following: [Profile,\
+        \ ...] }\nERRORS: 401 invalid session.\n"
+      responses:
+        '200':
+          description: Following
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - following
+                properties:
+                  following:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+  /users/{userId}/followers:
+    get:
+      tags:
+      - Follows
+      summary: Get a user's followers
+      description: 'PURPOSE: List another user''s followers.
+
+        CONCEPTS: Following, Profiling.
+
+        ACTIONS: Following._followers(userId) → set; Profiling._getProfilesByIds.
+
+        SIDE EFFECTS: None.
+
+        PREREQUISITES: Valid bearer access token.
+
+        RESPONSE: { followers: [Profile, ...] }
+
+        '
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Followers
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - followers
+                properties:
+                  followers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+  /users/{userId}/following:
+    get:
+      tags:
+      - Follows
+      summary: Get who a user is following
+      description: 'PURPOSE: List another user''s outgoing follow edges.
+
+        CONCEPTS: Following, Profiling.
+
+        ACTIONS: Following._following(userId) → set; Profiling._getProfilesByIds.
+
+        SIDE EFFECTS: None.
+
+        PREREQUISITES: Valid bearer access token.
+
+        RESPONSE: { following: [Profile, ...] }
+
+        '
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Following
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - following
+                properties:
+                  following:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+  /me/notifications:
+    get:
+      tags:
+      - Notifications
+      summary: Get own notifications (likes, comments, follows)
+      description: "PURPOSE: Render the Notifications page.\nCONCEPTS: Notifying,\
+        \ Profiling, Posting.\nACTIONS:\n  1. Notifying._getNotificationsForUser(user)\
+        \ → notifications (latest first)\n  2. Collect actorIds + target postIds;\
+        \ batch:\n     - Profiling._getProfilesByIds(actorIds) → actor profiles\n\
+        \     - Posting._getPostsByIds(postIds) → target posts (caption + imageUrl,\
+        \ image nulled when locked)\n  3. Mark all unread as read (per plan: \"Notifications\
+        \ are marked as\n     read when viewed\"). Synced via Notifying.markAllAsRead(user).\n\
+        SIDE EFFECTS: Notifications marked status=\"read\" on fetch.\nPREREQUISITES:\
+        \ Valid bearer access token.\nRESPONSE: { notifications: [Notification, ...]\
+        \ }\n  - like/comment notifications have targetPost set\n  - follow notifications\
+        \ have targetPost=null and targetPostId=null\n  - actor and targetPost are\
+        \ hydrated; actor/targetPost may be null\n    if the source user/post has\
+        \ been deleted\nERRORS: 401 invalid session.\n"
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - notifications
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+  /me/notifications/unread-count:
+    get:
+      tags:
+      - Notifications
+      summary: Get unread notification count (for badge)
+      description: 'PURPOSE: Render the unread count badge on the nav icon.
+
+        CONCEPTS: Notifying.
+
+        ACTIONS: Calls Notifying._getUnreadCount(user).
+
+        SIDE EFFECTS: None.
+
+        PREREQUISITES: Valid bearer access token.
+
+        RESPONSE: { count }
+
+        ERRORS: 401 invalid session.
+
+        '
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - count
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+  /notifications/{notificationId}/read:
+    patch:
+      tags:
+      - Notifications
+      summary: Mark a single notification as read
+      description: 'PURPOSE: Mark one notification as read.
+
+        CONCEPTS: Notifying.
+
+        ACTIONS: Calls Notifying.markAsRead(notificationId, recipient=user).
+
+        SIDE EFFECTS: Notification status := "read".
+
+        PREREQUISITES: Valid bearer access token. Must be the notification''s recipient.
+
+        RESPONSE: { notification: Notification } with read=true.
+
+        ERRORS: 403 "not your notification"; 404 "notification not found".
+
+        '
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - notification
+                properties:
+                  notification:
+                    $ref: '#/components/schemas/Notification'
+        '403':
+          description: Not your notification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /me/notifications/read-all:
+    post:
+      tags:
+      - Notifications
+      summary: Mark all notifications as read
+      description: 'PURPOSE: Bulk mark notifications as read.
+
+        CONCEPTS: Notifying.
+
+        ACTIONS: Calls Notifying.markAllAsRead(user) → returns count of notifications
+        updated.
+
+        SIDE EFFECTS: Every unread/seen notification for the user becomes read.
+
+        PREREQUISITES: Valid bearer access token.
+
+        RESPONSE: { count }
+
+        ERRORS: 401 invalid session.
+
+        '
+      responses:
+        '200':
+          description: All marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - count
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+  /me/subscription:
+    get:
+      tags:
+      - Subscription
+      summary: Get own subscription status
+      description: "PURPOSE: Render the Billing/Subscription page.\nCONCEPTS: Subscribing.\n\
+        ACTIONS: Calls Subscribing._getForOwner(user) → newest subscription row;\n\
+        \  Subscribing._hasActiveAccess(user) → access gate flag.\nSIDE EFFECTS: None.\n\
+        PREREQUISITES: Valid bearer access token.\nRESPONSE: { subscription: Subscription\
+        \ | null, hasActiveAccess }\nERRORS: 401 invalid session.\n"
+      responses:
+        '200':
+          description: Subscription status
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - hasActiveAccess
+                properties:
+                  subscription:
+                    nullable: true
+                    allOf:
+                    - $ref: '#/components/schemas/Subscription'
+                  hasActiveAccess:
+                    type: boolean
+  /subscription/checkout:
+    post:
+      tags:
+      - Subscription
+      summary: Start a Stripe Checkout session (Become a Supporter)
+      description: "PURPOSE: Begin the supporter subscription flow.\nCONCEPTS: Subscribing.\n\
+        ACTIONS: Calls Subscribing.startCheckout(owner=user, priceId,\n  successUrl,\
+        \ cancelUrl) — generates a hosted Checkout Session URL.\n  Server uses STRIPE_PRICE_ID\
+        \ from env if priceId not provided.\nSIDE EFFECTS: A placeholder Subscription\
+        \ row is created with status=\"pending\",\n  keyed by the sessionId. The frontend\
+        \ must FULL-PAGE redirect the\n  browser to `url` (do not use fetch — Stripe\
+        \ needs the navigation).\nPREREQUISITES: Valid bearer access token.\nRESPONSE:\
+        \ { sessionId, url } — frontend redirects to `url`.\nERRORS: 400 \"price not\
+        \ configured\"; 502 \"stripe error\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                successUrl:
+                  type: string
+                  maxLength: 2048
+                  description: Optional override for where Stripe redirects on success
+                    (carries ?session_id=...)
+                cancelUrl:
+                  type: string
+                  maxLength: 2048
+                  description: Optional override for where Stripe redirects on cancel
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - sessionId
+                - url
+                properties:
+                  sessionId:
+                    type: string
+                  url:
+                    type: string
+                    description: Stripe-hosted Checkout URL — frontend must full-page
+                      redirect
+  /subscription/verify:
+    post:
+      tags:
+      - Subscription
+      summary: Verify a Stripe Checkout session on return from the hosted page
+      description: "PURPOSE: Dual-signal — confirm checkout completion after the user\n\
+        \  lands back on the success URL.\nCONCEPTS: Subscribing.\nACTIONS: Calls\
+        \ Subscribing.verifySession(sessionId) — retrieves the\n  session server-side\
+        \ and applies the lifecycle status (merge-upsert\n  with the webhook path).\
+        \ Returns the resulting status and `applied`\n  (true only when THIS call\
+        \ changed local state; false when the\n  webhook already won the race).\n\
+        SIDE EFFECTS: Subscription row updated; on `applied=true`, supporter\n  access\
+        \ is granted (status=\"active\" or \"trialing\") OR revoked if\n  the session\
+        \ was a renewal-cancel that landed.\nPREREQUISITES: Valid bearer access token.\
+        \ `sessionId` comes from\n  the `?session_id=` query param Stripe appends\
+        \ to the success URL.\nRESPONSE: { status, active, applied }\nERRORS: 400\
+        \ \"session not found\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - sessionId
+              properties:
+                sessionId:
+                  type: string
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - status
+                - active
+                - applied
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - active
+                    - trialing
+                    - past_due
+                    - canceled
+                    - unpaid
+                    - incomplete
+                    - pending
+                  active:
+                    type: boolean
+                  applied:
+                    type: boolean
+  /subscription/cancel:
+    post:
+      tags:
+      - Subscription
+      summary: Cancel active subscription (defaults to cancel-at-period-end)
+      description: "PURPOSE: Cancel own subscription from the billing page.\nCONCEPTS:\
+        \ Subscribing.\nACTIONS: Calls Subscribing.cancel(owner=user, atPeriodEnd=true\
+        \ by default).\n  Stripe is asked to cancel at period end; the returned snapshot\
+        \ is\n  applied locally right away, and the subsequent\n  customer.subscription.*\
+        \ webhook confirms it (idempotent merge).\nSIDE EFFECTS: Subscription stays\
+        \ active until currentPeriodEnd; when\n  the period closes the webhook flips\
+        \ status=\"canceled\" and\n  _hasActiveAccess returns false.\nPREREQUISITES:\
+        \ Valid bearer access token. Subscription must be active\n  or trialing.\n\
+        RESPONSE: { status, cancelAtPeriodEnd }\nERRORS: 400 \"no active subscription\"\
+        ; 502 \"stripe error\".\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                atPeriodEnd:
+                  type: boolean
+                  default: true
+                  description: When true (default), cancel at the end of the current
+                    billing period. When false, cancel immediately.
+      responses:
+        '200':
+          description: Cancellation applied
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - status
+                - cancelAtPeriodEnd
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - active
+                    - trialing
+                    - past_due
+                    - canceled
+                    - unpaid
+                    - incomplete
+                    - pending
+                  cancelAtPeriodEnd:
+                    type: boolean
+  /subscription/portal:
+    post:
+      tags:
+      - Subscription
+      summary: Open Stripe Billing Portal (self-serve cancel / update card / invoices)
+      description: "PURPOSE: Provide a \"manage billing\" link that hands the user\
+        \ to\n  Stripe's hosted Billing Portal.\nCONCEPTS: Subscribing.\nACTIONS:\
+        \ Calls Subscribing.openPortal(owner=user) → returns a one-time\n  portal\
+        \ URL. Frontend must FULL-PAGE redirect to `url`.\nSIDE EFFECTS: None locally;\
+        \ all updates happen on Stripe's portal\n  and propagate back via webhook.\n\
+        PREREQUISITES: Valid bearer access token. The owner must have a\n  customerId\
+        \ (i.e. an existing subscription).\nRESPONSE: { url }\nERRORS: 400 \"no subscription\
+        \ on file\"; 502 \"stripe error\".\n"
+      responses:
+        '200':
+          description: Portal session created
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - url
+                properties:
+                  url:
+                    type: string
+                    description: Stripe Billing Portal URL — frontend must full-page
+                      redirect
+  /webhooks/stripe:
+    post:
+      tags:
+      - Webhooks
+      summary: Stripe webhook ingress (system-called)
+      security: []
+      description: "PURPOSE: Receive Stripe lifecycle events and apply subscription\
+        \ state.\nCALLED BY: Stripe's servers (NOT by the frontend). This endpoint\
+        \ is\n  NEVER referenced by any app graph edge or data_requirements — it\n\
+        \  is an expected \"unused endpoint\" in the app graph.\nCONCEPTS: Subscribing\
+        \ (system ingest).\nACTIONS: Calls Subscribing.ingestEvent(rawBody, headers)\
+        \ OPAQUELY.\n  The implementation (NOT this sync) verifies the Stripe signature\n\
+        \  over the exact rawBody via the stripe util; unverified or stale\n  events\
+        \ return an error without touching state. Dedupes by event id.\n  Then routes\
+        \ Subscribing's own events (mode=subscription) and\n  MERGE-upserts by subscriptionId:\n\
+        \    - checkout.session.completed (subscription mode only)\n    - customer.subscription.created\n\
+        \    - customer.subscription.updated (also delivers renewals + cancel-at-period-end\
+        \ landings)\n    - customer.subscription.deleted\n  Other Stripe products'\
+        \ events and duplicates are acknowledged 200\n  (applied=false).\nRESPONSES:\n\
+        \  - 200 { received: true } on success — even for irrelevant or duplicate\
+        \ events\n  - 400 { error } when ingestEvent returns an error\nREQUEST BODY:\
+        \ OPAQUE Stripe-signed payload. The runtime exposes\n  rawBody + headers on\
+        \ /webhooks/* routes; do NOT parse the body\n  here, do NOT verify a signature\
+        \ header here, and do NOT give the\n  body a JSON schema.\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              description: Opaque Stripe webhook payload (raw bytes — do not assume
+                JSON shape here)
+      responses:
+        '200':
+          description: Event acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - received
+                properties:
+                  received:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Ingest error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/dashboard/recent-posts:
+    get:
+      tags:
+      - Admin
+      summary: Recent posts for the Admin Dashboard (with moderation status)
+      description: "PURPOSE: Show recent posts in the admin moderation view with\n\
+        \  their moderation status.\nCONCEPTS: AdminAuthenticating (gate), Posting,\
+        \ Profiling, Liking, Commenting,\n  ModerationReview.\nACTIONS:\n  1. Sessioning._getUser(token)\
+        \ → principal\n  2. AdminAuthenticating._isAdmin(principal) — MUST be true\
+        \ (else 403)\n  3. Posting._allPosts(limit) → recent posts (includes anonymized)\n\
+        \  4. For each post: ModerationReview._getLatestForTarget(\"post\", postId)\n\
+        \     → resolve moderationStatus and moderationRuleViolated\n  5. For each:\
+        \ Liking._countForItem(postId) + Commenting._getCommentCount(postId)\n  6.\
+        \ Profiling._getProfilesByIds([post.authorId for non-null]) → authors\nSIDE\
+        \ EFFECTS: None.\nPREREQUISITES: Admin session (session principal must satisfy\n\
+        \  AdminAuthenticating._isAdmin).\nRESPONSE: { posts: [Post, ...] } — each\
+        \ post includes moderationStatus\n  and moderationRuleViolated so the admin\
+        \ can see the moderation state.\nERRORS: 401 invalid session; 403 not admin.\n"
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+      responses:
+        '200':
+          description: Recent posts
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/dashboard/recent-members:
+    get:
+      tags:
+      - Admin
+      summary: Recent members for the Admin Dashboard
+      description: "PURPOSE: Show recently joined members in the admin view.\nCONCEPTS:\
+        \ AdminAuthenticating (gate), MembershipListing.\nACTIONS:\n  1. AdminAuthenticating._isAdmin(principal)\
+        \ — MUST be true (else 403)\n  2. MembershipListing._listRecentMembers(limit)\
+        \ → member rows\nSIDE EFFECTS: None.\nPREREQUISITES: Admin session.\nRESPONSE:\
+        \ { members: [Member, ...] } — newest joinedAt first.\nERRORS: 401 invalid\
+        \ session; 403 not admin.\n"
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+      responses:
+        '200':
+          description: Recent members
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - members
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Member'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/posts/{postId}:
+    delete:
+      tags:
+      - Admin
+      summary: Admin remove a post (moderation, with moderation review cleanup)
+      description: "PURPOSE: Moderator removes any post for policy violations.\nCONCEPTS:\
+        \ AdminAuthenticating (gate), Posting, Commenting, Liking,\n  Notifying, Feed,\
+        \ ModerationReview.\nACTIONS (server-side; idempotent):\n  1. AdminAuthenticating._isAdmin(principal)\
+        \ — MUST be true (else 403)\n  2. Posting.deleteByModerator(postId, moderator=adminPrincipal)\n\
+        \  3. Commenting.deleteByItem(postId)\n  4. Liking.deleteByItem(postId)\n\
+        \  5. Notifying.deleteByTrigger(postId)\n  6. Feed.removeItem(postId)\n  7.\
+        \ ModerationReview.deleteByTarget(\"post\", postId) — drop moderation review\n\
+        \  8. MediaHosting.delete(imageId, adminPrincipal) — best-effort; the\n  \
+        \   image uploader is the original author, not the admin, so the\n     concept's\
+        \ uploader-match check would FAIL — leave the file\n     orphaned rather than\
+        \ fail the moderation.\nSIDE EFFECTS: All derived data for the post is removed,\
+        \ including its\n  ModerationReview row.\nPREREQUISITES: Admin session.\n\
+        RESPONSE: { ok: true }\nERRORS: 401 invalid session; 403 not admin; 404 post\
+        \ not found.\n"
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Post removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/admins:
+    get:
+      tags:
+      - Admin
+      summary: List admins (for the admin management view)
+      description: "PURPOSE: Show the admin management list.\nCONCEPTS: AdminAuthenticating\
+        \ (gate + query).\nACTIONS: AdminAuthenticating._isAdmin(principal) (gate)\
+        \ +\n  AdminAuthenticating._listAdmins() (query).\nSIDE EFFECTS: None.\nPREREQUISITES:\
+        \ Admin session.\nRESPONSE: { admins: [AdminPrincipal, ...] }\nERRORS: 401\
+        \ invalid session; 403 not admin.\n"
+      responses:
+        '200':
+          description: Admins
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - admins
+                properties:
+                  admins:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminPrincipal'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/users/{userId}/promote:
+    post:
+      tags:
+      - Admin
+      summary: Promote a registered user to admin
+      description: "PURPOSE: Grant admin role to a registered user.\nCONCEPTS: AdminAuthenticating.\n\
+        ACTIONS:\n  1. AdminAuthenticating._isAdmin(principal) — MUST be true (else\
+        \ 403)\n  2. AdminAuthenticating.promote(user=userId)\nSIDE EFFECTS: A \"\
+        promoted\" Admin row is added for the user; _isAdmin\n  returns true for that\
+        \ user from then on.\nPREREQUISITES: Admin session. The user must not already\
+        \ be an admin.\nRESPONSE: { ok: true }\nERRORS: 401 invalid session; 403 not\
+        \ admin;\n  400 \"user is already an admin\"; 404 user not found.\n"
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: User promoted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Already admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/users/{userId}/demote:
+    post:
+      tags:
+      - Admin
+      summary: Demote a promoted admin back to regular user
+      description: "PURPOSE: Revoke admin role from a promoted user.\nCONCEPTS: AdminAuthenticating.\n\
+        ACTIONS:\n  1. AdminAuthenticating._isAdmin(principal) — MUST be true (else\
+        \ 403)\n  2. AdminAuthenticating.demote(user=userId)\nSIDE EFFECTS: The promoted\
+        \ Admin row is removed. The root admin\n  (subject == root) CANNOT be demoted\
+        \ — the concept enforces this so\n  the app can never lose all admins.\nPREREQUISITES:\
+        \ Admin session. The target must be a \"promoted\" admin.\nRESPONSE: { ok:\
+        \ true }\nERRORS: 401 invalid session; 403 not admin;\n  400 \"cannot demote\
+        \ root admin\"; 400 \"user is not a promoted admin\".\n"
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: User demoted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Cannot demote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/moderation/{reviewId}/approve:
+    post:
+      tags:
+      - Moderation
+      summary: Admin approve a flagged item (return it to feeds)
+      description: "PURPOSE: The admin approves a flagged post or comment, returning\
+        \ it to\n  feeds and public visibility.\nCONCEPTS: AdminAuthenticating (gate),\
+        \ ModerationReview, Feed, Following,\n  Posting (for content lookup), Commenting\
+        \ (for content lookup).\nACTIONS:\n  1. Sessioning._getUser(token) → principal\n\
+        \  2. AdminAuthenticating._isAdmin(principal) — MUST be true (else 403)\n\
+        \  3. ModerationReview._getReview(reviewId) → review (must exist, must have\n\
+        \     status=\"flagged\" — else 400)\n  4. ModerationReview.adminApprove(review=reviewId,\
+        \ admin=principal)\n     → sets status=\"admin_approved\", adminDecision=\"\
+        approved\"\n  5. If review.targetType is \"post\":\n     a. Posting._getPost(review.targetId)\
+        \ → post content\n     b. Following._followers(post.authorId) → list of follower\
+        \ userIds\n     c. For each follower: Feed.fanoutEntry([follower], post.authorId,\n\
+        \        review.targetId, post.createdAt, {caption, imageUrl, supportersOnly,\
+        \ authorId})\n        — re-adds the post to all followers' Home Feeds\n  6.\
+        \ If review.targetType is \"comment\": no feed action needed (comments are\n\
+        \     fetched per-post, not stored in feeds)\nSIDE EFFECTS: Review status\
+        \ → \"admin_approved\". If the item is a post, it is\n  re-fanned-out to all\
+        \ followers' feeds and becomes visible. The item is\n  removed from the moderation\
+        \ queue (status is no longer \"flagged\").\nPREREQUISITES: Admin session.\
+        \ Review must exist and have status=\"flagged\".\nRESPONSE: { ok: true }\n\
+        ERRORS: 401 invalid session; 403 not admin;\n  404 \"review not found\"; 400\
+        \ \"review is not flagged\".\n"
+      parameters:
+      - name: reviewId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Item approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Review is not flagged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/moderation/queue:
+    get:
+      tags:
+      - Moderation
+      summary: Admin moderation queue — all flagged items with AI rationale
+      description: "PURPOSE: List all posts and comments flagged by the automated\
+        \ AI moderation\n  system, with the AI's written rationale, violated rule,\
+        \ and content preview.\n  Powers the Admin Moderation Queue page.\nCONCEPTS:\
+        \ AdminAuthenticating (gate), ModerationReview, Posting, Commenting, Profiling.\n\
+        ACTIONS:\n  1. Sessioning._getUser(token) → principal\n  2. AdminAuthenticating._isAdmin(principal)\
+        \ — MUST be true (else 403)\n  3. ModerationReview._listFlagged(limit, skip)\
+        \ → all reviews with status=\"flagged\"\n  4. For each review:\n     a. If\
+        \ targetType is \"post\": Posting._getPost(targetId) → post content\n    \
+        \    (caption, imageUrl, supportersOnly)\n     b. If targetType is \"comment\"\
+        : Commenting._getComment(targetId) → comment text\n  5. Collect all authorIds;\
+        \ Profiling._getProfilesByIds(authorIds) → author profiles\n  6. Assemble\
+        \ each item with: reviewId, targetType, targetId, author (hydrated),\n   \
+        \  content (post content or comment text), ruleViolated, rationale, createdAt\n\
+        SIDE EFFECTS: None.\nPREREQUISITES: Admin session (session principal must\
+        \ satisfy\n  AdminAuthenticating._isAdmin).\nRESPONSE: { items: [ModerationQueueItem,\
+        \ ...] }\n  — each item has the full content preview, author info, violated\
+        \ rule,\n  and AI's written rationale.\nERRORS: 401 invalid session; 403 not\
+        \ admin.\n"
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: skip
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Flagged moderation items
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModerationQueueItem'
+        '401':
+          description: Invalid session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/moderation/{reviewId}/remove:
+    post:
+      tags:
+      - Moderation
+      summary: Admin permanently remove a flagged item
+      description: "PURPOSE: The admin permanently removes a flagged post or comment\
+        \ from the\n  platform. The underlying content is hard-deleted with full cascade.\n\
+        CONCEPTS: AdminAuthenticating (gate), ModerationReview, Posting, Commenting,\n\
+        \  Liking, Notifying, Feed.\nACTIONS:\n  1. Sessioning._getUser(token) → principal\n\
+        \  2. AdminAuthenticating._isAdmin(principal) — MUST be true (else 403)\n\
+        \  3. ModerationReview._getReview(reviewId) → review (must exist; status must\n\
+        \     be \"flagged\", \"approved\", or \"admin_approved\" — else 400)\n  4.\
+        \ ModerationReview.adminRemove(review=reviewId, admin=principal)\n     → sets\
+        \ status=\"admin_removed\", adminDecision=\"removed\"\n  5. If review.targetType\
+        \ is \"post\":\n     a. Posting.deleteByModerator(review.targetId, moderator=principal)\n\
+        \     b. Commenting.deleteByItem(review.targetId)\n     c. Liking.deleteByItem(review.targetId)\n\
+        \     d. Notifying.deleteByTrigger(review.targetId)\n     e. Feed.removeItem(review.targetId)\n\
+        \     f. ModerationReview.deleteByTarget(\"post\", review.targetId) — drop\
+        \ the review row\n  6. If review.targetType is \"comment\":\n     a. Commenting.deleteByModerator(review.targetId,\
+        \ moderator=principal)\n     b. ModerationReview.deleteByTarget(\"comment\"\
+        , review.targetId) — drop the review row\nSIDE EFFECTS: Full cascade deletion\
+        \ of the content and all derived data.\n  The item is removed from the moderation\
+        \ queue (review row deleted).\nPREREQUISITES: Admin session. Review must exist\
+        \ and have status \"flagged\",\n  \"approved\", or \"admin_approved\".\nRESPONSE:\
+        \ { ok: true }\nERRORS: 401 invalid session; 403 not admin;\n  404 \"review\
+        \ not found\"; 400 \"review cannot be removed in current state\".\n"
+      parameters:
+      - name: reviewId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                    - true
+        '400':
+          description: Review cannot be removed in current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

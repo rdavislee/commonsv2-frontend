@@ -1,0 +1,315 @@
+{
+  "iterations": 27,
+  "finalVerdict": "pass",
+  "nodeReviews": [
+    {
+      "nodeId": "create_profile",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "create_post",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "edit_post",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "edit_profile",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "settings",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "home_feed",
+      "issues": [
+        {
+          "severity": "critical",
+          "file": "",
+          "description": "",
+          "expected": "",
+          "actual": "",
+          "evidence": ""
+        }
+      ],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "discover",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "root",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "login",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "register",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "post_detail",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "user_profile",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "my_profile",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "notifications",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "json",
+      "issues": [
+        {
+          "severity": "critical",
+          "file": "...",
+          "description": "...",
+          "expected": "...",
+          "actual": "...",
+          "evidence": "..."
+        }
+      ],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "search_results",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "admin_login",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "]}[{",
+      "issues": [
+        {
+          "severity": "critical",
+          "file": "",
+          "edgeRef": "Open Post",
+          "description": "",
+          "expected": "",
+          "actual": "",
+          "evidence": ""
+        }
+      ],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "admin_moderation_queue",
+      "issues": [],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "billing",
+      "issues": [
+        {
+          "severity": "critical",
+          "file": "",
+          "description": "",
+          "expected": "",
+          "actual": "expected",
+          "evidence": ""
+        }
+      ],
+      "verdict": "pass"
+    },
+    {
+      "nodeId": "admin_dashboard",
+      "issues": [],
+      "verdict": "pass"
+    }
+  ],
+  "buildErrorHistory": [
+    {
+      "iteration": 1,
+      "errors": "src/pages/EditPost.tsx(39,26): error TS1128: Declaration or statement expected.\r\nsrc/pages/EditPost.tsx(39,28): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,32): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,36): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,43): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,50): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,55): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,64): error TS1005: ')' expected.\r\nsrc/pages/EditPost.tsx(39,81): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,106): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,120): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,121): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,123): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,130): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,155): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,172): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,176): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,180): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,184): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,205): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,232): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,236): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,251): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,254): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,259): error TS1005: ')' expected.\r\nsrc/pages/EditPost.tsx(39,267): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,274): error TS1109: Expression expected.\r\nsrc/pages/EditPost.tsx(39,276): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,277): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,279): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,297): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,301): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,305): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,309): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,317): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,337): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,364): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,368): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,393): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,396): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,401): error TS1005: ')' expected.\r\nsrc/pages/EditPost.tsx(39,407): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,414): error TS1109: Expression expected.\r\nsrc/pages/EditPost.tsx(39,416): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,417): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,419): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,426): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,439): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,443): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,447): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,451): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,472): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,499): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,503): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,522): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,525): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,530): error TS1005: ')' expected.\r\nsrc/pages/EditPost.tsx(39,538): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,545): error TS1109: Expression expected.\r\nsrc/pages/EditPost.tsx(39,547): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,548): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,550): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,554): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,571): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,575): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,579): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,583): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,587): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,593): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,610): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,637): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,641): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,661): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,664): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,669): error TS1005: ')' expected.\r\nsrc/pages/EditPost.tsx(39,677): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,684): error TS1109: Expression expected.\r\nsrc/pages/EditPost.tsx(39,686): error TS1003: Identifier expected.\r\nsrc/pages/EditPost.tsx(39,697): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,699): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,703): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,710): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,716): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,720): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,725): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,750): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,753): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,772): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,792): error TS1005:\n\n... [truncated] ...\n\nllowed in return type position for functions and methods.\r\nsrc/pages/EditPost.tsx(39,1323): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,1340): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,1341): error TS1127: Invalid character.\r\nsrc/pages/EditPost.tsx(39,1343): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,1350): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,1363): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,1367): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,1371): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,1375): error TS1434: Unexpected keyword or identifier.\r\nsrc/pages/EditPost.tsx(39,1396): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,1423): error TS1005: ',' expected.\r\nsrc/pages/EditPost.tsx(39,1427): error TS1005: '(' expected.\r\nsrc/pages/EditPost.tsx(39,1551): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,1630): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(39,1679): error TS1005: ')' expected.\r\nsrc/pages/EditPost.tsx(39,1687): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(39,1783): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(39,1805): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(39,3549): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(39,3630): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(39,3677): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(39,3773): error TS1443: Module declaration names may only use ' or \" quoted strings.\r\nsrc/pages/EditPost.tsx(67,46): error TS1005: ';' expected.\r\nsrc/pages/EditPost.tsx(127,2): error TS1160: Unterminated template literal.\r\n\n",
+      "source": "post_fix_0"
+    }
+  ],
+  "fixerHistory": [
+    {
+      "iteration": 1,
+      "filesModified": [
+        "src/pages/CreatePost.tsx"
+      ]
+    },
+    {
+      "iteration": 2,
+      "filesModified": [
+        "src/pages/Onboarding.tsx"
+      ]
+    },
+    {
+      "iteration": 3,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 4,
+      "filesModified": [
+        "src/pages/Settings.tsx"
+      ]
+    },
+    {
+      "iteration": 5,
+      "filesModified": [
+        "src/pages/Discover.tsx"
+      ]
+    },
+    {
+      "iteration": 6,
+      "filesModified": [
+        "src/pages/EditProfile.tsx"
+      ]
+    },
+    {
+      "iteration": 7,
+      "filesModified": [
+        "src/components/Nav.tsx",
+        "src/pages/HomeFeed.tsx"
+      ]
+    },
+    {
+      "iteration": 8,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 9,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 10,
+      "filesModified": []
+    },
+    {
+      "iteration": 11,
+      "filesModified": [
+        "src/pages/Settings.tsx"
+      ]
+    },
+    {
+      "iteration": 12,
+      "filesModified": []
+    },
+    {
+      "iteration": 13,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 14,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 15,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 16,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 17,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 18,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 19,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 20,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 21,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 22,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 23,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 24,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 25,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    },
+    {
+      "iteration": 26,
+      "filesModified": []
+    },
+    {
+      "iteration": 27,
+      "filesModified": [
+        "src/pages/EditPost.tsx"
+      ]
+    }
+  ],
+  "buildClean": true
+}

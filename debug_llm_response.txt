@@ -1,0 +1,4095 @@
+<dyad-write path="src/lib/types.ts" description="TypeScript types matching the OpenAPI spec">
+// Type definitions for the Commons API
+
+export interface User {
+  _id: string;
+  email: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Profile {
+  _id: string;
+  userId: string;
+  username: string;
+  name: string;
+  bio: string;
+  bioImageUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeResponse {
+  userId: string;
+  email: string;
+  isAdmin: boolean;
+}
+
+export interface AuthorSummary {
+  _id: string;
+  username: string;
+  name: string;
+  bioImageUrl: string;
+}
+
+export interface PostContent {
+  caption: string;
+  imageUrl: string | null;
+  supportersOnly: boolean;
+}
+
+export type ModerationStatus =
+  | 'pending'
+  | 'approved'
+  | 'flagged'
+  | 'admin_approved'
+  | 'admin_removed';
+
+export type ModerationRule =
+  | 'harassment'
+  | 'hate'
+  | 'sexually_explicit'
+  | 'spam';
+
+export interface Post {
+  _id: string;
+  authorId: string | null;
+  author: AuthorSummary | null;
+  content: PostContent;
+  type: 'image';
+  isLocked: boolean;
+  isLiked: boolean;
+  isOwner: boolean;
+  likeCount: number;
+  commentCount: number;
+  moderationStatus: ModerationStatus;
+  moderationRuleViolated: ModerationRule | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Comment {
+  _id: string;
+  item: string;
+  authorId: string | null;
+  author: AuthorSummary | null;
+  content: string;
+  isOwner: boolean;
+  moderationStatus: ModerationStatus;
+  moderationRuleViolated: ModerationRule | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Notification {
+  _id: string;
+  recipient: string;
+  actorId: string;
+  actor: { _id: string; username: string; name: string; bioImageUrl: string } | null;
+  type: 'like' | 'comment' | 'follow';
+  targetPostId: string | null;
+  targetPost: { _id: string; caption: string; imageUrl: string | null } | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface Subscription {
+  _id: string;
+  userId: string | null;
+  status:
+    | 'active'
+    | 'trialing'
+    | 'past_due'
+    | 'canceled'
+    | 'unpaid'
+    | 'incomplete'
+    | 'pending';
+  planId: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Member {
+  userId: string;
+  displayName: string;
+  avatarUrl: string;
+  joinedAt: string;
+  followerCount: number;
+}
+
+export interface ModerationQueueItem {
+  reviewId: string;
+  targetType: 'post' | 'comment';
+  targetId: string;
+  authorId: string | null;
+  author: AuthorSummary | null;
+  status: ModerationStatus;
+  ruleViolated: ModerationRule | null;
+  rationale: string;
+  content: {
+    caption?: string;
+    imageUrl?: string | null;
+    supportersOnly?: boolean;
+    text?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminPrincipal {
+  subject: string;
+  source: 'root' | 'promoted';
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  user?: User;
+  admin?: AdminPrincipal;
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface MeProfileResponse {
+  profile: Profile;
+  followerCount: number;
+  followingCount: number;
+  hasActiveSubscription: boolean;
+}
+
+export interface UserProfileResponse {
+  profile: Profile;
+  followerCount: number;
+  followingCount: number;
+  isFollowing: boolean;
+  posts: Post[];
+}
+
+export interface PostsListResponse {
+  posts: Post[];
+  nextCursor: string | number | null;
+}
+
+export interface PostDetailResponse {
+  post: Post;
+  comments: Comment[];
+}
+
+export interface CommentsResponse {
+  comments: Comment[];
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+}
+
+export interface SubscriptionResponse {
+  subscription: Subscription | null;
+  hasActiveAccess: boolean;
+}
+
+export interface ModerationQueueResponse {
+  items: ModerationQueueItem[];
+}
+
+export interface MembersResponse {
+  members: Member[];
+}
+
+export interface ProfilesSearchResponse {
+  profiles: Profile[];
+}
+</dyad-write>
+
+<dyad-write path="src/lib/auth.tsx" description="AuthContext with 3-outcome state machine and re-derived login state">
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from 'react';
+import { api, getAuthToken, setAuthToken, clearAuthToken, ApiError } from './api';
+import type {
+  Profile,
+  MeResponse,
+  MeProfileResponse,
+  AuthResponse,
+} from './types';
+
+export type AuthStatus =
+  | 'loading'
+  | 'unauthenticated'
+  | 'needsOnboarding'
+  | 'authenticated';
+
+export interface AuthState {
+  status: AuthStatus;
+  userId: string | null;
+  email: string | null;
+  isAdmin: boolean;
+  profile: Profile | null;
+  hasActiveSubscription: boolean;
+  followerCount: number;
+  followingCount: number;
+}
+
+interface AuthContextValue extends AuthState {
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  adminLogin: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  createProfile: (data: {
+    username: string;
+    name: string;
+    bio: string;
+    bioImageUrl: string;
+  }) => Promise<void>;
+  updateProfile: (data: {
+    username?: string;
+    name?: string;
+    bio?: string;
+    bioImageUrl?: string;
+  }) => Promise<void>;
+  refresh: () => Promise<void>;
+}
+
+const initialState: AuthState = {
+  status: 'loading',
+  userId: null,
+  email: null,
+  isAdmin: false,
+  profile: null,
+  hasActiveSubscription: false,
+  followerCount: 0,
+  followingCount: 0,
+};
+
+function unauthenticatedState(): AuthState {
+  return {
+    status: 'unauthenticated',
+    userId: null,
+    email: null,
+    isAdmin: false,
+    profile: null,
+    hasActiveSubscription: false,
+    followerCount: 0,
+    followingCount: 0,
+  };
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<AuthState>(initialState);
+
+  const refresh = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setState(unauthenticatedState());
+      return;
+    }
+
+    // Fetch /me to verify token and get admin status / email
+    let me: MeResponse | null = null;
+    try {
+      me = await api.get<MeResponse>('/me');
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        clearAuthToken();
+        setState(unauthenticatedState());
+        return;
+      }
+      // transient — keep token, keep current state
+      return;
+    }
+
+    if (!me) return;
+
+    // Now check for profile
+    try {
+      const profileRes = await api.get<MeProfileResponse>('/me/profile');
+      setState({
+        status: 'authenticated',
+        userId: me.userId,
+        email: me.email,
+        isAdmin: me.isAdmin,
+        profile: profileRes.profile,
+        hasActiveSubscription: profileRes.hasActiveSubscription,
+        followerCount: profileRes.followerCount,
+        followingCount: profileRes.followingCount,
+      });
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 404) {
+          // Token valid, no profile yet — needs onboarding
+          setState({
+            status: 'needsOnboarding',
+            userId: me.userId,
+            email: me.email,
+            isAdmin: me.isAdmin,
+            profile: null,
+            hasActiveSubscription: false,
+            followerCount: 0,
+            followingCount: 0,
+          });
+          return;
+        }
+        if (e.status === 401 || e.status === 403) {
+          clearAuthToken();
+          setState(unauthenticatedState());
+          return;
+        }
+      }
+      // transient — keep state as-is
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const res = await api.post<AuthResponse>('/auth/login', { email, password });
+      setAuthToken(res.accessToken);
+      // CRITICAL: re-derive state so hasProfile/role etc. are correct
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const register = useCallback(
+    async (email: string, password: string) => {
+      const res = await api.post<AuthResponse>('/auth/register', { email, password });
+      setAuthToken(res.accessToken);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const adminLogin = useCallback(
+    async (username: string, password: string) => {
+      const res = await api.post<AuthResponse>('/admin/login', {
+        email: username,
+        password,
+      });
+      setAuthToken(res.accessToken);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // session already gone — continue with local cleanup unconditionally
+    }
+    clearAuthToken();
+    setState(unauthenticatedState());
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    try {
+      await api.delete('/me');
+    } catch {
+      // continue with cleanup
+    }
+    clearAuthToken();
+    setState(unauthenticatedState());
+  }, []);
+
+  const createProfile = useCallback(
+    async (data: {
+      username: string;
+      name: string;
+      bio: string;
+      bioImageUrl: string;
+    }) => {
+      await api.post('/me/profile', data);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const updateProfile = useCallback(
+    async (data: {
+      username?: string;
+      name?: string;
+      bio?: string;
+      bioImageUrl?: string;
+    }) => {
+      await api.patch('/me/profile', data);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  const value: AuthContextValue = {
+    ...state,
+    login,
+    register,
+    adminLogin,
+    logout,
+    deleteAccount,
+    createProfile,
+    updateProfile,
+    refresh,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+}
+
+export function useAuthStatus() {
+  const { status, isAdmin } = useAuth();
+  const isAuthenticated = status === 'needsOnboarding' || status === 'authenticated';
+  const hasProfile = status === 'authenticated';
+  return { status, isAuthenticated, hasProfile, isAdmin };
+}
+</dyad-write>
+
+<dyad-write path="src/lib/toast.tsx" description="Simple toast notification system">
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+} from 'react';
+
+export type ToastVariant = 'default' | 'error' | 'success';
+
+interface Toast {
+  id: number;
+  message: string;
+  variant: ToastVariant;
+}
+
+interface ToastContextValue {
+  toast: (message: string, variant?: ToastVariant) => void;
+}
+
+const ToastContext = createContext<ToastContextValue | undefined>(undefined);
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const toast = useCallback(
+    (message: string, variant: ToastVariant = 'default') => {
+      const id = Date.now() + Math.random();
+      setToasts((prev) => [...prev, { id, message, variant }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 4000);
+    },
+    []
+  );
+
+  return (
+    <ToastContext.Provider value={{ toast }}>
+      {children}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={
+              'px-4 py-3 rounded-md shadow-lg text-sm animate-in fade-in ' +
+              (t.variant === 'error'
+                ? 'bg-destructive text-destructive-foreground'
+                : t.variant === 'success'
+                ? 'bg-green-600 text-white'
+                : 'bg-card border border-border text-foreground')
+            }
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error('useToast must be used within ToastProvider');
+  return ctx;
+}
+</dyad-write>
+
+<dyad-write path="src/components/ProtectedRoute.tsx" description="Layered route guards (AuthGuard, ProfileGuard, AdminGuard)">
+import { Navigate } from 'react-router-dom';
+import { useAuthStatus } from '@/lib/auth';
+
+export function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { status, isAuthenticated } = useAuthStatus();
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+export function ProfileGuard({ children }: { children: React.ReactNode }) {
+  const { status, isAuthenticated, hasProfile, isAdmin } = useAuthStatus();
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Admins without profiles can still browse the regular app
+  if (!hasProfile && !isAdmin) return <Navigate to="/onboarding" replace />;
+  return <>{children}</>;
+}
+
+export function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { status, isAuthenticated, isAdmin } = useAuthStatus();
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/admin/login" replace />;
+  if (!isAdmin) return <Navigate to="/home" replace />;
+  return <>{children}</>;
+}
+</dyad-write>
+
+<dyad-write path="src/components/LockedPlaceholder.tsx" description="Placeholder shown for supporters-only posts when viewer is not a supporter">
+export function LockedPlaceholder({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={
+        'bg-muted flex flex-col items-center justify-center text-muted-foreground aspect-square ' +
+        className
+      }
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="w-16 h-16 mb-2"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+        />
+      </svg>
+      <p className="text-sm font-medium">Supporters only</p>
+      <p className="text-xs mt-1">Subscribe to unlock</p>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/components/Nav.tsx" description="Top navigation bar for authenticated regular users">
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
+import { useEffect, useState } from 'react';
+import { getMediaUrl } from '@/lib/api';
+
+export function Nav() {
+  const { profile, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ count: number }>('/me/notifications/unread-count')
+      .then((res) => {
+        if (!cancelled) setUnreadCount(res.count);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
+  return (
+    <nav className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
+      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-5">
+          <Link to="/home" className="text-lg font-bold tracking-tight">
+            Commons
+          </Link>
+          <Link
+            to="/home"
+            className="text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Home
+          </Link>
+          <Link
+            to="/discover"
+            className="text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Discover
+          </Link>
+          <Link
+            to="/search"
+            className="text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Search
+          </Link>
+          <Link
+            to="/notifications"
+            className="text-sm text-muted-foreground hover:text-foreground transition relative"
+          >
+            Notifications
+            {unreadCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </Link>
+        </div>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/me"
+            className="flex items-center gap-2 hover:opacity-80 transition"
+          >
+            {profile?.bioImageUrl ? (
+              <img
+                src={getMediaUrl(profile.bioImageUrl)}
+                alt=""
+                className="w-7 h-7 rounded-full object-cover border border-border"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-muted" />
+            )}
+            <span className="text-sm font-medium">{profile?.name ?? 'Me'}</span>
+          </Link>
+          <Link
+            to="/billing"
+            className="text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Billing
+          </Link>
+          <Link
+            to="/settings"
+            className="text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Settings
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-muted-foreground hover:text-destructive transition"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </nav>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/components/AdminNav.tsx" description="Top navigation bar for admin pages">
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+
+export function AdminNav() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [queueCount, setQueueCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ items: unknown[] }>('/admin/moderation/queue?limit=1')
+      .then((res) => {
+        if (!cancelled) setQueueCount(res.items?.length ?? 0);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/admin/login', { replace: true });
+  };
+
+  return (
+    <nav className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
+      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-5">
+          <Link to="/admin" className="text-lg font-bold tracking-tight">
+            Commons Admin
+          </Link>
+          <Link
+            to="/admin"
+            className="text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Dashboard
+          </Link>
+          <Link
+            to="/admin/moderation"
+            className="text-sm text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+          >
+            Moderation Queue
+            {queueCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
+                {queueCount}
+              </span>
+            )}
+          </Link>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="text-sm text-muted-foreground hover:text-destructive transition"
+        >
+          Logout
+        </button>
+      </div>
+    </nav>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/components/PostCard.tsx" description="Post card used in feeds and grids with like/comment actions">
+import { Link } from 'react-router-dom';
+import { LockedPlaceholder } from './LockedPlaceholder';
+import type { Post } from '@/lib/types';
+import { getMediaUrl } from '@/lib/api';
+
+interface Props {
+  post: Post;
+  onLike?: (postId: string) => void;
+  onUnlike?: (postId: string) => void;
+  showAuthor?: boolean;
+}
+
+export function PostCard({ post, onLike, onUnlike, showAuthor = true }: Props) {
+  const imgSrc = post.content.imageUrl ? getMediaUrl(post.content.imageUrl) : null;
+
+  return (
+    <article className="bg-card border border-border rounded-lg overflow-hidden">
+      {showAuthor && (
+        <header className="p-3 flex items-center gap-3">
+          {post.author ? (
+            <Link
+              to={`/users/${post.authorId}`}
+              className="flex items-center gap-2 hover:opacity-80"
+            >
+              {post.author.bioImageUrl ? (
+                <img
+                  src={getMediaUrl(post.author.bioImageUrl)}
+                  alt=""
+                  className="w-8 h-8 rounded-full object-cover border border-border"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-muted" />
+              )}
+              <span className="font-semibold text-sm">{post.author.name}</span>
+            </Link>
+          ) : (
+            <span className="text-sm text-muted-foreground">[deleted]</span>
+          )}
+          {post.content.supportersOnly && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              Supporters
+            </span>
+          )}
+        </header>
+      )}
+
+      <Link to={`/posts/${post._id}`} className="block">
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt=""
+            className="w-full aspect-square object-cover bg-muted"
+          />
+        ) : post.isLocked ? (
+          <LockedPlaceholder />
+        ) : (
+          <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">
+            No image
+          </div>
+        )}
+      </Link>
+
+      <div className="p-3 space-y-2">
+        {post.content.caption && (
+          <p className="text-sm whitespace-pre-wrap line-clamp-3">
+            {post.content.caption}
+          </p>
+        )}
+        <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              if (post.isLiked) onUnlike?.(post._id);
+              else onLike?.(post._id);
+            }}
+            className="flex items-center gap-1.5 hover:text-foreground transition"
+          >
+            <span className="text-base">{post.isLiked ? '♥' : '♡'}</span>
+            <span>{post.likeCount}</span>
+          </button>
+          <Link
+            to={`/posts/${post._id}`}
+            className="flex items-center gap-1.5 hover:text-foreground transition"
+          >
+            <span className="text-base">💬</span>
+            <span>{post.commentCount}</span>
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/components/PostGrid.tsx" description="3-column post grid for profile pages">
+import { Link } from 'react-router-dom';
+import { LockedPlaceholder } from './LockedPlaceholder';
+import type { Post } from '@/lib/types';
+import { getMediaUrl } from '@/lib/api';
+
+interface Props {
+  posts: Post[];
+  emptyMessage?: string;
+}
+
+const ruleLabels: Record<string, string> = {
+  harassment: 'Harassment',
+  hate: 'Hate',
+  sexually_explicit: 'Sexually explicit',
+  spam: 'Spam',
+};
+
+export function PostGrid({ posts, emptyMessage = 'No posts yet' }: Props) {
+  if (posts.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">{emptyMessage}</div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-1 sm:gap-2">
+      {posts.map((post) => {
+        const imgSrc = post.content.imageUrl
+          ? getMediaUrl(post.content.imageUrl)
+          : null;
+        const isBlocked = post.moderationStatus === 'flagged';
+        const isPending = post.moderationStatus === 'pending';
+        return (
+          <Link
+            key={post._id}
+            to={`/posts/${post._id}`}
+            className="relative block aspect-square bg-muted overflow-hidden group"
+          >
+            {imgSrc ? (
+              <img
+                src={imgSrc}
+                alt=""
+                className="w-full h-full object-cover group-hover:opacity-90 transition"
+              />
+            ) : post.isLocked ? (
+              <LockedPlaceholder />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                No image
+              </div>
+            )}
+            {(isBlocked || isPending) && (
+              <div className="absolute top-1 right-1">
+                <span
+                  className={
+                    'text-[10px] px-1.5 py-0.5 rounded ' +
+                    (isBlocked
+                      ? 'bg-destructive text-destructive-foreground'
+                      : 'bg-amber-500 text-white')
+                  }
+                >
+                  {isBlocked
+                    ? `Blocked${
+                        post.moderationRuleViolated
+                          ? ': ' + ruleLabels[post.moderationRuleViolated]
+                          : ''
+                      }`
+                    : 'Pending'}
+                </span>
+              </div>
+            )}
+            {post.content.supportersOnly && !isBlocked && !isPending && (
+              <div className="absolute top-1 right-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/90 text-primary-foreground">
+                  Supporters
+                </span>
+              </div>
+            )}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Root.tsx" description="Root entry: redirects based on auth state">
+import { Navigate } from 'react-router-dom';
+import { useAuthStatus } from '@/lib/auth';
+
+export default function Root() {
+  const { status, isAuthenticated, hasProfile } = useAuthStatus();
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!hasProfile) return <Navigate to="/onboarding" replace />;
+  return <Navigate to="/home" replace />;
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Login.tsx" description="Login page">
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/lib/toast';
+import { ApiError } from '@/lib/api';
+
+export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await login(email, password);
+      navigate('/', { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        toast('Invalid email or password.', 'error');
+      } else {
+        toast('Login failed.', 'error');
+      }
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Commons</h1>
+          <p className="text-muted-foreground mt-2">Welcome back</p>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+        <div className="text-center text-sm text-muted-foreground space-y-2">
+          <div>
+            Don&apos;t have an account?{' '}
+            <Link to="/register" className="text-primary hover:underline">
+              Sign up
+            </Link>
+          </div>
+          <div>
+            <Link
+              to="/admin/login"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Admin login
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Register.tsx" description="Register page">
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/lib/toast';
+
+export default function Register() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirm) {
+      toast('Passwords do not match.', 'error');
+      return;
+    }
+    if (password.length < 8) {
+      toast('Password must be at least 8 characters.', 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await register(email, password);
+      navigate('/onboarding', { replace: true });
+    } catch {
+      toast('Registration failed. Check your input.', 'error');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Commons</h1>
+          <p className="text-muted-foreground mt-2">Create your account</p>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="new-password"
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="confirm" className="text-sm font-medium">
+              Confirm password
+            </label>
+            <input
+              id="confirm"
+              type="password"
+              required
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Creating…' : 'Create account'}
+          </button>
+        </form>
+        <div className="text-center text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <Link to="/login" className="text-primary hover:underline">
+            Sign in
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Onboarding.tsx" description="Profile onboarding page (create profile after registration)">
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/lib/toast';
+import { uploadFile, getMediaUrl } from '@/lib/api';
+
+export default function Onboarding() {
+  const { createProfile } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const res = await uploadFile<{ media: { url: string } }>(
+        '/media/upload',
+        file
+      );
+      setAvatarUrl(res.media.url);
+    } catch {
+      toast('Avatar upload failed.', 'error');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim() || !username.trim()) return;
+    setSubmitting(true);
+    try {
+      await createProfile({
+        username: username.trim(),
+        name: displayName.trim(),
+        bio: bio.trim(),
+        bioImageUrl: avatarUrl,
+      });
+      navigate('/home', { replace: true });
+    } catch {
+      toast('Could not create profile. Username may be taken.', 'error');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold tracking-tight">Welcome to Commons</h1>
+          <p className="text-muted-foreground mt-2">Set up your profile</p>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          <div className="flex justify-center">
+            <label
+              htmlFor="avatar"
+              className="cursor-pointer w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-dashed border-border hover:border-primary transition"
+            >
+              {avatarUrl ? (
+                <img
+                  src={getMediaUrl(avatarUrl)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-xs text-muted-foreground text-center px-2">
+                  {uploadingAvatar ? 'Uploading…' : 'Upload avatar'}
+                </span>
+              )}
+              <input
+                id="avatar"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+            </label>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="displayName" className="text-sm font-medium">
+              Display name
+            </label>
+            <input
+              id="displayName"
+              type="text"
+              required
+              maxLength={60}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="username" className="text-sm font-medium">
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              required
+              minLength={3}
+              maxLength={30}
+              pattern="[a-zA-Z0-9_-]+"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">
+              3–30 chars, letters/numbers/underscore/dash
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="bio" className="text-sm font-medium">
+              Bio
+            </label>
+            <textarea
+              id="bio"
+              maxLength={500}
+              rows={3}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting || uploadingAvatar}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Creating…' : 'Create profile'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/HomeFeed.tsx" description="Home feed: posts from followed users">
+import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { PostCard } from '@/components/PostCard';
+import { useToast } from '@/lib/toast';
+import { useAuth } from '@/lib/auth';
+import type { Post, PostsListResponse } from '@/lib/types';
+
+export default function HomeFeed() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { profile } = useAuth();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPosts = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<PostsListResponse>('/feed/home?limit=50');
+      const sorted = (res.posts ?? []).slice().sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setPosts(sorted);
+    } catch {
+      toast('Could not load feed.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLike = async (postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p._id === postId ? { ...p, isLiked: true, likeCount: p.likeCount + 1 } : p
+      )
+    );
+    try {
+      const res = await api.post<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${postId}/like`
+      );
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId ? { ...p, likeCount: res.likeCount, isLiked: true } : p
+        )
+      );
+    } catch {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId
+            ? { ...p, isLiked: false, likeCount: Math.max(0, p.likeCount - 1) }
+            : p
+        )
+      );
+      toast('Could not like post.', 'error');
+    }
+  };
+
+  const handleUnlike = async (postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p._id === postId
+          ? { ...p, isLiked: false, likeCount: Math.max(0, p.likeCount - 1) }
+          : p
+      )
+    );
+    try {
+      const res = await api.post<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${postId}/like`,
+        undefined
+      ).catch(() => null);
+      // server endpoint is DELETE
+      const r =
+        res ??
+        (await api.delete<{ likeCount: number; isLiked: boolean }>(
+          `/posts/${postId}/like`
+        ));
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId ? { ...p, likeCount: r.likeCount, isLiked: false } : p
+        )
+      );
+    } catch {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId
+            ? { ...p, isLiked: true, likeCount: p.likeCount + 1 }
+            : p
+        )
+      );
+      toast('Could not unlike post.', 'error');
+    }
+  };
+
+  const unlikeClean = async (postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p._id === postId
+          ? { ...p, isLiked: false, likeCount: Math.max(0, p.likeCount - 1) }
+          : p
+      )
+    );
+    try {
+      const res = await api.delete<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${postId}/like`
+      );
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId ? { ...p, likeCount: res.likeCount, isLiked: false } : p
+        )
+      );
+    } catch {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId
+            ? { ...p, isLiked: true, likeCount: p.likeCount + 1 }
+            : p
+        )
+      );
+      toast('Could not unlike post.', 'error');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Home</h1>
+          <button
+            onClick={() => navigate('/posts/new')}
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition"
+          >
+            + New Post
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading…</div>
+        ) : posts.length === 0 ? (
+          <div className="bg-card border border-border rounded-lg p-12 text-center space-y-3">
+            <p className="text-lg">Your home feed is empty</p>
+            <p className="text-sm text-muted-foreground">
+              Visit{' '}
+              <Link to="/discover" className="text-primary hover:underline">
+                Discover
+              </Link>{' '}
+              to find people to follow
+            </p>
+            {!profile && (
+              <p className="text-xs text-muted-foreground">
+                Sign in to start posting
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <PostCard
+                key={post._id}
+                post={post}
+                onLike={handleLike}
+                onUnlike={unlikeClean}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Discover.tsx" description="Discover feed: recent posts from all users">
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { PostCard } from '@/components/PostCard';
+import { useToast } from '@/lib/toast';
+import type { Post, PostsListResponse } from '@/lib/types';
+
+export default function Discover() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPosts = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<PostsListResponse>('/feed/discover?limit=50');
+      const sorted = (res.posts ?? []).slice().sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setPosts(sorted);
+    } catch {
+      toast('Could not load discover feed.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLike = async (postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p._id === postId ? { ...p, isLiked: true, likeCount: p.likeCount + 1 } : p
+      )
+    );
+    try {
+      const res = await api.post<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${postId}/like`
+      );
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId ? { ...p, likeCount: res.likeCount, isLiked: true } : p
+        )
+      );
+    } catch {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId
+            ? { ...p, isLiked: false, likeCount: Math.max(0, p.likeCount - 1) }
+            : p
+        )
+      );
+      toast('Could not like post.', 'error');
+    }
+  };
+
+  const handleUnlike = async (postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p._id === postId
+          ? { ...p, isLiked: false, likeCount: Math.max(0, p.likeCount - 1) }
+          : p
+      )
+    );
+    try {
+      const res = await api.delete<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${postId}/like`
+      );
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId ? { ...p, likeCount: res.likeCount, isLiked: false } : p
+        )
+      );
+    } catch {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p._id === postId
+            ? { ...p, isLiked: true, likeCount: p.likeCount + 1 }
+            : p
+        )
+      );
+      toast('Could not unlike post.', 'error');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Discover</h1>
+          <button
+            onClick={() => navigate('/posts/new')}
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition"
+          >
+            + New Post
+          </button>
+        </div>
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading…</div>
+        ) : posts.length === 0 ? (
+          <div className="bg-card border border-border rounded-lg p-12 text-center">
+            <p className="text-muted-foreground">No posts yet</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <PostCard
+                key={post._id}
+                post={post}
+                onLike={handleLike}
+                onUnlike={handleUnlike}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/PostDetail.tsx" description="Post detail page with comments, likes, owner/admin actions">
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { api, getMediaUrl, ApiError } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { LockedPlaceholder } from '@/components/LockedPlaceholder';
+import { useToast } from '@/lib/toast';
+import type { Post, Comment, PostDetailResponse, MeResponse } from '@/lib/types';
+
+const ruleLabels: Record<string, string> = {
+  harassment: 'Harassment',
+  hate: 'Hate',
+  sexually_explicit: 'Sexually explicit material',
+  spam: 'Spam',
+};
+
+export default function PostDetail() {
+  const { postId } = useParams<{ postId: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [post, setPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  const fetchData = async () => {
+    if (!postId) return;
+    setLoading(true);
+    try {
+      const [postRes, meRes] = await Promise.all([
+        api.get<PostDetailResponse>(`/posts/${postId}`),
+        api.get<MeResponse>('/me'),
+      ]);
+      setPost(postRes.post);
+      const sortedComments = (postRes.comments ?? []).slice().sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setComments(sortedComments);
+      setMe(meRes);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        setPost(null);
+      } else {
+        toast('Could not load post.', 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]);
+
+  const handleLike = async () => {
+    if (!post) return;
+    setPost({ ...post, isLiked: true, likeCount: post.likeCount + 1 });
+    try {
+      const res = await api.post<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${post._id}/like`
+      );
+      setPost((p) => (p ? { ...p, likeCount: res.likeCount, isLiked: true } : p));
+    } catch {
+      setPost((p) =>
+        p
+          ? { ...p, isLiked: false, likeCount: Math.max(0, p.likeCount - 1) }
+          : p
+      );
+      toast('Could not like post.', 'error');
+    }
+  };
+
+  const handleUnlike = async () => {
+    if (!post) return;
+    setPost({
+      ...post,
+      isLiked: false,
+      likeCount: Math.max(0, post.likeCount - 1),
+    });
+    try {
+      const res = await api.delete<{ likeCount: number; isLiked: boolean }>(
+        `/posts/${post._id}/like`
+      );
+      setPost((p) =>
+        p ? { ...p, likeCount: res.likeCount, isLiked: false } : p
+      );
+    } catch {
+      setPost((p) =>
+        p ? { ...p, isLiked: true, likeCount: p.likeCount + 1 } : p
+      );
+      toast('Could not unlike post.', 'error');
+    }
+  };
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postId || !commentText.trim() || submittingComment) return;
+    setSubmittingComment(true);
+    try {
+      await api.post(`/posts/${postId}/comments`, { text: commentText.trim() });
+      setCommentText('');
+      await fetchData();
+    } catch {
+      toast('Could not post comment.', 'error');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm('Delete this comment?')) return;
+    try {
+      await api.delete(`/comments/${commentId}`);
+      await fetchData();
+    } catch {
+      toast('Could not delete comment.', 'error');
+    }
+  };
+
+  const handleDeletePost = async () => {
+    if (!post) return;
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    try {
+      await api.delete(`/posts/${post._id}`);
+      navigate('/home', { replace: true });
+    } catch {
+      toast('Could not delete post.', 'error');
+    }
+  };
+
+  const handleAdminRemove = async () => {
+    if (!post) return;
+    if (!confirm('Remove this post?')) return;
+    try {
+      await api.delete(`/admin/posts/${post._id}`);
+      navigate('/admin', { replace: true });
+    } catch {
+      toast('Could not remove post.', 'error');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="text-center py-12 text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+          <h2 className="text-xl font-semibold mb-2">Post not found</h2>
+          <button
+            onClick={() => navigate(-1)}
+            className="text-primary hover:underline text-sm"
+          >
+            Go back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isAdmin = me?.isAdmin ?? false;
+  const imgSrc = post.content.imageUrl ? getMediaUrl(post.content.imageUrl) : null;
+  const isBlocked =
+    post.moderationStatus === 'flagged' ||
+    post.moderationStatus === 'pending';
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          ← Back
+        </button>
+
+        <article className="bg-card border border-border rounded-lg overflow-hidden">
+          {isBlocked ? (
+            <div className="p-6 bg-destructive/10 border-b border-destructive/30">
+              <h2 className="font-semibold text-destructive mb-2">
+                This post was flagged
+              </h2>
+              <p className="text-sm">
+                Your post violated our community guideline:{' '}
+                <span className="font-medium">
+                  {post.moderationRuleViolated
+                    ? ruleLabels[post.moderationRuleViolated]
+                    : 'Content policy'}
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                It is hidden from public feeds. You can edit and resubmit, or
+                delete it.
+              </p>
+            </div>
+          ) : imgSrc ? (
+            <img
+              src={imgSrc}
+              alt=""
+              className="w-full max-h-[600px] object-cover bg-muted"
+            />
+          ) : post.isLocked ? (
+            <LockedPlaceholder className="h-[400px]" />
+          ) : (
+            <div className="w-full aspect-square bg-muted" />
+          )}
+
+          <div className="p-4 space-y-3">
+            {post.author ? (
+              <Link
+                to={`/users/${post.authorId}`}
+                className="flex items-center gap-3 hover:opacity-80"
+              >
+                {post.author.bioImageUrl && (
+                  <img
+                    src={getMediaUrl(post.author.bioImageUrl)}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover border border-border"
+                  />
+                )}
+                <div>
+                  <div className="font-semibold text-sm">{post.author.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    @{post.author.username}
+                  </div>
+                </div>
+              </Link>
+            ) : (
+              <span className="text-sm text-muted-foreground">[deleted]</span>
+            )}
+
+            {!isBlocked && post.content.caption && (
+              <p className="text-sm whitespace-pre-wrap">{post.content.caption}</p>
+            )}
+
+            {post.content.supportersOnly && !isBlocked && (
+              <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                Supporters only
+              </span>
+            )}
+
+            {!isBlocked && (
+              <div className="flex items-center gap-4 text-sm text-muted-foreground pt-2 border-t border-border">
+                <button
+                  onClick={post.isLiked ? handleUnlike : handleLike}
+                  className="flex items-center gap-1.5 hover:text-foreground transition pt-2"
+                >
+                  <span className="text-base">{post.isLiked ? '♥' : '♡'}</span>
+                  <span>{post.likeCount}</span>
+                </button>
+                <span className="flex items-center gap-1.5 pt-2">
+                  <span className="text-base">💬</span>
+                  <span>{post.commentCount}</span>
+                </span>
+              </div>
+            )}
+
+            {(post.isOwner || isAdmin) && (
+              <div className="flex gap-2 pt-2 border-t border-border">
+                {post.isOwner && (
+                  <>
+                    <button
+                      onClick={() => navigate(`/posts/${post._id}/edit`)}
+                      className="px-3 py-1.5 rounded-md bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 transition"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDeletePost}
+                      className="px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition"
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+                {isAdmin && !post.isOwner && (
+                  <button
+                    onClick={handleAdminRemove}
+                    className="px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground text-xs font-medium hover:bg-destructive/90 transition"
+                  >
+                    Admin Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </article>
+
+        {!isBlocked && (
+          <section className="mt-6 space-y-4">
+            <h2 className="font-semibold">Comments</h2>
+            {comments.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Be the first to comment.
+              </p>
+            )}
+            <div className="space-y-3">
+              {comments.map((c) => (
+                <div
+                  key={c._id}
+                  className="bg-card border border-border rounded-lg p-3 space-y-1"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    {c.author?.bioImageUrl && (
+                      <img
+                        src={getMediaUrl(c.author.bioImageUrl)}
+                        alt=""
+                        className="w-6 h-6 rounded-full object-cover"
+                      />
+                    )}
+                    <span className="font-medium">{c.author?.name ?? '[deleted]'}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(c.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  {c.moderationStatus === 'flagged' && c.isOwner ? (
+                    <p className="text-xs text-destructive">
+                      Your comment was blocked for:{' '}
+                      {c.moderationRuleViolated
+                        ? ruleLabels[c.moderationRuleViolated]
+                        : 'Content policy'}
+                    </p>
+                  ) : c.moderationStatus === 'pending' && c.isOwner ? (
+                    <p className="text-xs text-amber-600">
+                      Your comment is pending review.
+                    </p>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{c.content}</p>
+                  )}
+                  {c.isOwner && c.moderationStatus !== 'admin_removed' && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => handleDeleteComment(c._id)}
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleSubmitComment} className="space-y-2 pt-2">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Add a comment…"
+                rows={2}
+                maxLength={1000}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none text-sm"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={submittingComment || !commentText.trim()}
+                  className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+                >
+                  {submittingComment ? 'Posting…' : 'Post'}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/CreatePost.tsx" description="Create new post page (upload photo + caption)">
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api, uploadFile, getMediaUrl } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { useToast } from '@/lib/toast';
+import type { Post } from '@/lib/types';
+
+export default function CreatePost() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [caption, setCaption] = useState('');
+  const [supportersOnly, setSupportersOnly] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const res = await uploadFile<{ media: { url: string } }>(
+        '/media/upload',
+        file
+      );
+      setUploadedUrl(res.media.url);
+    } catch {
+      toast('Photo upload failed.', 'error');
+      setImageFile(null);
+      setImagePreview(null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadedUrl || !caption.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await api.post<{ post: Post }>('/posts', {
+        caption: caption.trim(),
+        imageUrl: uploadedUrl,
+        supportersOnly,
+      });
+      navigate(`/posts/${res.post._id}`, { replace: true });
+    } catch {
+      toast('Could not create post.', 'error');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">New Post</h1>
+          <button
+            onClick={() => navigate('/home')}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Photo</label>
+            <div className="border-2 border-dashed border-border rounded-lg overflow-hidden">
+              {imagePreview ? (
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt=""
+                    className="w-full max-h-[500px] object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreview(null);
+                      setUploadedUrl(null);
+                    }}
+                    className="absolute top-2 right-2 px-2 py-1 rounded-md bg-background/80 text-foreground text-xs"
+                  >
+                    Replace
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor="photo"
+                  className="block aspect-square flex items-center justify-center cursor-pointer hover:bg-muted/50"
+                >
+                  <span className="text-muted-foreground text-sm">
+                    {uploading ? 'Uploading…' : 'Click to upload photo'}
+                  </span>
+                </label>
+              )}
+              <input
+                id="photo"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+            {uploadedUrl && (
+              <p className="text-xs text-green-600">Upload complete</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="caption" className="text-sm font-medium">
+              Caption
+            </label>
+            <textarea
+              id="caption"
+              required
+              maxLength={2000}
+              rows={4}
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={supportersOnly}
+              onChange={(e) => setSupportersOnly(e.target.checked)}
+              className="w-4 h-4 rounded border-input"
+            />
+            <span className="text-sm">
+              Supporters only{' '}
+              <span className="text-muted-foreground">
+                (only subscribers can view)
+              </span>
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            disabled={submitting || !uploadedUrl || !caption.trim()}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Posting…' : 'Post'}
+          </button>
+        </form>
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/EditPost.tsx" description="Edit own post page (caption and supporters-only flag)">
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { api, getMediaUrl } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { useToast } from '@/lib/toast';
+import type { PostDetailResponse, Post } from '@/lib/types';
+
+export default function EditPost() {
+  const { postId } = useParams<{ postId: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [post, setPost] = useState<Post | null>(null);
+  const [caption, setCaption] = useState('');
+  const [supportersOnly, setSupportersOnly] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!postId) return;
+    setLoading(true);
+    api
+      .get<PostDetailResponse>(`/posts/${postId}`)
+      .then((res) => {
+        setPost(res.post);
+        setCaption(res.post.content.caption);
+        setSupportersOnly(res.post.content.supportersOnly);
+      })
+      .catch(() => {
+        toast('Could not load post.', 'error');
+      })
+      .finally(() => setLoading(false));
+  }, [postId, toast]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postId) return;
+    setSubmitting(true);
+    try {
+      await api.patch(`/posts/${postId}`, {
+        caption: caption.trim(),
+        supportersOnly,
+      });
+      navigate(`/posts/${postId}`, { replace: true });
+    } catch {
+      toast('Could not save changes.', 'error');
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="text-center py-12 text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="text-center py-12">Post not found</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Edit Post</h1>
+          <button
+            onClick={() => navigate(`/posts/${postId}`)}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          {post.content.imageUrl && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Image</label>
+              <img
+                src={getMediaUrl(post.content.imageUrl)}
+                alt=""
+                className="w-full max-h-[400px] object-cover rounded-md border border-border"
+              />
+              <p className="text-xs text-muted-foreground">
+                Image cannot be changed.
+              </p>
+            </div>
+          )}
+          <div className="space-y-2">
+            <label htmlFor="caption" className="text-sm font-medium">
+              Caption
+            </label>
+            <textarea
+              id="caption"
+              required
+              maxLength={2000}
+              rows={4}
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              Editing the caption will trigger a new moderation review.
+            </p>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={supportersOnly}
+              onChange={(e) => setSupportersOnly(e.target.checked)}
+              className="w-4 h-4 rounded border-input"
+            />
+            <span className="text-sm">Supporters only</span>
+          </label>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Saving…' : 'Save Changes'}
+          </button>
+        </form>
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/UserProfile.tsx" description="Public user profile page with follow button and post grid">
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { api, getMediaUrl } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { PostGrid } from '@/components/PostGrid';
+import { useToast } from '@/lib/toast';
+import type { UserProfileResponse } from '@/lib/types';
+
+export default function UserProfile() {
+  const { userId } = useParams<{ userId: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [data, setData] = useState<UserProfileResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = async () => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      const res = await api.get<UserProfileResponse>(
+        `/profiles/${userId}?limit=60`
+      );
+      const sortedPosts = (res.posts ?? []).slice().sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setData({ ...res, posts: sortedPosts });
+    } catch {
+      toast('Could not load profile.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const handleFollow = async () => {
+    if (!data || !userId) return;
+    setData({
+      ...data,
+      isFollowing: true,
+      followerCount: data.followerCount + 1,
+    });
+    try {
+      await api.post(`/users/${userId}/follow`);
+    } catch {
+      setData({
+        ...data,
+        isFollowing: false,
+        followerCount: Math.max(0, data.followerCount - 1),
+      });
+      toast('Could not follow user.', 'error');
+    }
+  };
+
+  const handleUnfollow = async () => {
+    if (!data || !userId) return;
+    setData({
+      ...data,
+      isFollowing: false,
+      followerCount: Math.max(0, data.followerCount - 1),
+    });
+    try {
+      await api.delete(`/users/${userId}/follow`);
+    } catch {
+      setData({
+        ...data,
+        isFollowing: true,
+        followerCount: data.followerCount + 1,
+      });
+      toast('Could not unfollow user.', 'error');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="text-center py-12 text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="text-center py-12">Profile not found</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-4xl mx-auto px-4 py-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          ← Back
+        </button>
+
+        <header className="bg-card border border-border rounded-lg p-6 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+            {data.profile.bioImageUrl ? (
+              <img
+                src={getMediaUrl(data.profile.bioImageUrl)}
+                alt=""
+                className="w-24 h-24 rounded-full object-cover border border-border"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-muted" />
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold">{data.profile.name}</h1>
+              <p className="text-sm text-muted-foreground">
+                @{data.profile.username}
+              </p>
+              {data.profile.bio && (
+                <p className="text-sm mt-3 whitespace-pre-wrap">
+                  {data.profile.bio}
+                </p>
+              )}
+              <div className="flex gap-4 mt-3 text-sm text-muted-foreground">
+                <span>
+                  <strong className="text-foreground">
+                    {data.followerCount}
+                  </strong>{' '}
+                  followers
+                </span>
+                <span>
+                  <strong className="text-foreground">
+                    {data.followingCount}
+                  </strong>{' '}
+                  following
+                </span>
+              </div>
+            </div>
+            <div>
+              {data.isFollowing ? (
+                <button
+                  onClick={handleUnfollow}
+                  className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition"
+                >
+                  Following
+                </button>
+              ) : (
+                <button
+                  onClick={handleFollow}
+                  className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition"
+                >
+                  Follow
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <h2 className="text-sm font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
+          Posts
+        </h2>
+        <PostGrid posts={data.posts} emptyMessage="No posts yet" />
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/MyProfile.tsx" description="Own profile page with edit/create buttons and full post grid">
+import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api, getMediaUrl } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { PostGrid } from '@/components/PostGrid';
+import { useAuth } from '@/lib/auth';
+import type { MeProfileResponse, PostsListResponse, Post } from '@/lib/types';
+
+export default function MyProfile() {
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const [meRes, setMeRes] = useState<MeProfileResponse | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      api.get<MeProfileResponse>('/me/profile'),
+      api.get<PostsListResponse>('/me/posts?limit=60'),
+    ])
+      .then(([profileRes, postsRes]) => {
+        setMeRes(profileRes);
+        const sortedPosts = (postsRes.posts ?? []).slice().sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setPosts(sortedPosts);
+      })
+      .catch(() => {
+        /* ignore */
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !meRes) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Nav />
+        <div className="text-center py-12 text-muted-foreground">Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-4xl mx-auto px-4 py-6">
+        <header className="bg-card border border-border rounded-lg p-6 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+            {profile?.bioImageUrl ? (
+              <img
+                src={getMediaUrl(profile.bioImageUrl)}
+                alt=""
+                className="w-24 h-24 rounded-full object-cover border border-border"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-muted" />
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold">{profile?.name}</h1>
+              <p className="text-sm text-muted-foreground">
+                @{profile?.username}
+              </p>
+              {profile?.bio && (
+                <p className="text-sm mt-3 whitespace-pre-wrap">
+                  {profile.bio}
+                </p>
+              )}
+              <div className="flex gap-4 mt-3 text-sm text-muted-foreground">
+                <span>
+                  <strong className="text-foreground">
+                    {meRes.followerCount}
+                  </strong>{' '}
+                  followers
+                </span>
+                <span>
+                  <strong className="text-foreground">
+                    {meRes.followingCount}
+                  </strong>{' '}
+                  following
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Link
+                to="/me/profile/edit"
+                className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition"
+              >
+                Edit Profile
+              </Link>
+              <button
+                onClick={() => navigate('/posts/new')}
+                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition"
+              >
+                + New Post
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <h2 className="text-sm font-semibold uppercase text-muted-foreground mb-3 tracking-wider">
+          Your Posts
+        </h2>
+        <PostGrid posts={posts} emptyMessage="You haven't posted yet" />
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/EditProfile.tsx" description="Edit own profile page">
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/lib/toast';
+import { api, uploadFile, getMediaUrl, ApiError } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import type { MeProfileResponse } from '@/lib/types';
+
+export default function EditProfile() {
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [displayName, setDisplayName] = useState(profile?.name ?? '');
+  const [username, setUsername] = useState(profile?.username ?? '');
+  const [bio, setBio] = useState(profile?.bio ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(profile?.bioImageUrl ?? '');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<MeProfileResponse>('/me/profile')
+      .then((res) => {
+        setDisplayName(res.profile.name);
+        setUsername(res.profile.username);
+        setBio(res.profile.bio);
+        setAvatarUrl(res.profile.bioImageUrl);
+      })
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 404) {
+          navigate('/onboarding', { replace: true });
+        } else {
+          toast('Could not load profile.', 'error');
+        }
+      });
+  }, [navigate, toast]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const res = await uploadFile<{ media: { url: string } }>(
+        '/media/upload',
+        file
+      );
+      setAvatarUrl(res.media.url);
+    } catch {
+      toast('Avatar upload failed.', 'error');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const { updateProfile } = useAuth();
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!displayName.trim() || !username.trim()) return;
+    setSubmitting(true);
+    try {
+      await updateProfile({
+        name: displayName.trim(),
+        username: username.trim(),
+        bio: bio.trim(),
+        bioImageUrl: avatarUrl,
+      });
+      navigate('/me', { replace: true });
+    } catch {
+      toast('Could not save profile.', 'error');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-md mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Edit Profile</h1>
+          <button
+            onClick={() => navigate('/me')}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          <div className="flex justify-center">
+            <label
+              htmlFor="avatar"
+              className="cursor-pointer w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-dashed border-border hover:border-primary transition"
+            >
+              {avatarUrl ? (
+                <img
+                  src={getMediaUrl(avatarUrl)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-xs text-muted-foreground text-center px-2">
+                  {uploadingAvatar ? 'Uploading…' : 'Upload'}
+                </span>
+              )}
+              <input
+                id="avatar"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+            </label>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="displayName" className="text-sm font-medium">
+              Display name
+            </label>
+            <input
+              id="displayName"
+              type="text"
+              required
+              maxLength={60}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="username" className="text-sm font-medium">
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              required
+              minLength={3}
+              maxLength={30}
+              pattern="[a-zA-Z0-9_-]+"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="bio" className="text-sm font-medium">
+              Bio
+            </label>
+            <textarea
+              id="bio"
+              maxLength={500}
+              rows={3}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting || uploadingAvatar}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Saving…' : 'Save Changes'}
+          </button>
+        </form>
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Notifications.tsx" description="Notifications page with mark-read actions">
+import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { useToast } from '@/lib/toast';
+import { getMediaUrl } from '@/lib/api';
+import type { NotificationsResponse, Notification } from '@/lib/types';
+
+export default function Notifications() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<NotificationsResponse>('/me/notifications');
+      const sorted = (res.notifications ?? []).slice().sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setNotifications(sorted);
+    } catch {
+      toast('Could not load notifications.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
+      );
+    } catch {
+      toast('Could not mark notification as read.', 'error');
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.post('/me/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const goToTarget = (n: Notification) => {
+    if (!n.read) handleMarkRead(n._id);
+    if (n.type === 'follow' && n.actorId) {
+      navigate(`/users/${n.actorId}`);
+    } else if (n.targetPostId) {
+      navigate(`/posts/${n.targetPostId}`);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Notifications</h1>
+          {notifications.some((n) => !n.read) && (
+            <button
+              onClick={handleMarkAllRead}
+              className="text-sm text-primary hover:underline"
+            >
+              Mark all as read
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading…</div>
+        ) : notifications.length === 0 ? (
+          <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground">
+            No notifications yet
+          </div>
+        ) : (
+          <div className="bg-card border border-border rounded-lg divide-y divide-border">
+            {notifications.map((n) => (
+              <div
+                key={n._id}
+                className={
+                  'p-3 flex items-start gap-3 hover:bg-muted/40 transition cursor-pointer ' +
+                  (!n.read ? 'bg-primary/5' : '')
+                }
+                onClick={() => goToTarget(n)}
+              >
+                {n.actor?.bioImageUrl && (
+                  <img
+                    src={getMediaUrl(n.actor.bioImageUrl)}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover border border-border flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm">
+                    <span className="font-medium">
+                      {n.actor?.name ?? 'Someone'}
+                    </span>{' '}
+                    {n.type === 'like' && 'liked your post'}
+                    {n.type === 'comment' && 'commented on your post'}
+                    {n.type === 'follow' && 'started following you'}
+                  </p>
+                  {n.targetPost && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {n.targetPost.caption || '(post)'}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(n.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                {!n.read && (
+                  <span className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Billing.tsx" description="Billing / subscription page with Stripe checkout, cancel, and manage billing">
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { api } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { useToast } from '@/lib/toast';
+import type { SubscriptionResponse } from '@/lib/types';
+
+export default function Billing() {
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [data, setData] = useState<SubscriptionResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<SubscriptionResponse>('/me/subscription');
+      setData(res);
+    } catch {
+      toast('Could not load subscription.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Verify checkout return
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    if (sessionId) {
+      api
+        .post<{ status: string; active: boolean; applied: boolean }>(
+          '/subscription/verify',
+          { sessionId }
+        )
+        .then(() => {
+          // strip query param so refresh doesn't re-verify
+          const next = new URLSearchParams(searchParams);
+          next.delete('session_id');
+          setSearchParams(next, { replace: true });
+          fetchData();
+        })
+        .catch(() => {
+          toast('Could not verify checkout.', 'error');
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleCheckout = async () => {
+    setWorking(true);
+    try {
+      const successUrl = `${window.location.origin}/billing?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${window.location.origin}/billing`;
+      const res = await api.post<{ sessionId: string; url: string }>(
+        '/subscription/checkout',
+        { successUrl, cancelUrl }
+      );
+      // Full-page redirect to Stripe-hosted checkout
+      window.location.assign(res.url);
+    } catch {
+      toast('Could not start checkout.', 'error');
+      setWorking(false);
+    }
+  };
+
+  const handlePortal = async () => {
+    setWorking(true);
+    try {
+      const res = await api.post<{ url: string }>('/subscription/portal');
+      window.location.assign(res.url);
+    } catch {
+      toast('Could not open billing portal.', 'error');
+      setWorking(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!confirm('Cancel subscription at end of current period?')) return;
+    setWorking(true);
+    try {
+      await api.post('/subscription/cancel', { atPeriodEnd: true });
+      await fetchData();
+      toast('Subscription will end at period close.', 'success');
+    } catch {
+      toast('Could not cancel subscription.', 'error');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const sub = data?.subscription;
+  const hasAccess = data?.hasActiveAccess ?? false;
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <h1 className="text-2xl font-bold mb-6">Billing</h1>
+
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading…</div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+              <h2 className="font-semibold">Supporter plan</h2>
+              <p className="text-sm text-muted-foreground">
+                Become a supporter to unlock supporters-only content from
+                creators.
+              </p>
+
+              {!hasAccess && !sub && (
+                <button
+                  onClick={handleCheckout}
+                  disabled={working}
+                  className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+                >
+                  {working ? 'Loading…' : 'Become a Supporter'}
+                </button>
+              )}
+
+              {sub && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        'inline-block text-xs px-2 py-0.5 rounded-full font-medium ' +
+                        (hasAccess
+                          ? 'bg-green-500/20 text-green-700'
+                          : 'bg-muted text-muted-foreground')
+                      }
+                    >
+                      {sub.status}
+                      {hasAccess ? ' · active' : ''}
+                    </span>
+                    {sub.cancelAtPeriodEnd && (
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700">
+                        Ending at period close
+                      </span>
+                    )}
+                  </div>
+                  {sub.currentPeriodEnd && (
+                    <p className="text-sm text-muted-foreground">
+                      {sub.cancelAtPeriodEnd
+                        ? 'Access until'
+                        : 'Renews on'}
+                      :{' '}
+                      {new Date(sub.currentPeriodEnd).toLocaleDateString()}
+                    </p>
+                  )}
+                  {sub.startedAt && (
+                    <p className="text-sm text-muted-foreground">
+                      Started: {new Date(sub.startedAt).toLocaleDateString()}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {hasAccess && (
+                      <>
+                        <button
+                          onClick={handlePortal}
+                          disabled={working}
+                          className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition"
+                        >
+                          Manage Billing
+                        </button>
+                        {!sub.cancelAtPeriodEnd && (
+                          <button
+                            onClick={handleCancel}
+                            disabled={working}
+                            className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 transition"
+                          >
+                            Cancel Subscription
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {!hasAccess && (
+                      <button
+                        onClick={handleCheckout}
+                        disabled={working}
+                        className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+                      >
+                        {working ? 'Loading…' : 'Become a Supporter'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/Settings.tsx" description="Settings page: email, logout, change password, delete account">
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/lib/toast';
+import { api } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import type { MeResponse } from '@/lib/types';
+
+export default function Settings() {
+  const { email, logout, deleteAccount } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<MeResponse>('/me')
+      .then(setMe)
+      .catch(() => {
+        /* ignore */
+      });
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (
+      !confirm(
+        'Delete your account permanently? This cannot be undone. All your posts and data will be removed.'
+      )
+    )
+      return;
+    if (!confirm('Are you absolutely sure?')) return;
+    await deleteAccount();
+    navigate('/login', { replace: true });
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !oldPassword || newPassword.length < 8) {
+      toast('New password must be at least 8 characters.', 'error');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.post('/auth/reset-password', {
+        email,
+        oldPassword,
+        newPassword,
+      });
+      toast('Password updated.', 'success');
+      setOldPassword('');
+      setNewPassword('');
+    } catch {
+      toast('Could not change password.', 'error');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <h1 className="text-2xl font-bold">Settings</h1>
+
+        <section className="bg-card border border-border rounded-lg p-6 space-y-2">
+          <h2 className="font-semibold">Account</h2>
+          <div className="text-sm">
+            <span className="text-muted-foreground">Email: </span>
+            <span>{me?.email ?? email ?? '—'}</span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="mt-2 px-4 py-2 rounded-md bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition"
+          >
+            Log out
+          </button>
+        </section>
+
+        <section className="bg-card border border-border rounded-lg p-6 space-y-4">
+          <h2 className="font-semibold">Change password</h2>
+          <form onSubmit={handleChangePassword} className="space-y-3">
+            <div className="space-y-2">
+              <label htmlFor="old" className="text-sm font-medium">
+                Current password
+              </label>
+              <input
+                id="old"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="new" className="text-sm font-medium">
+                New password
+              </label>
+              <input
+                id="new"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={changingPassword}
+              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+            >
+              {changingPassword ? 'Updating…' : 'Update password'}
+            </button>
+          </form>
+        </section>
+
+        <section className="bg-card border border-destructive/30 rounded-lg p-6 space-y-3">
+          <h2 className="font-semibold text-destructive">Danger zone</h2>
+          <p className="text-sm text-muted-foreground">
+            Permanently delete your account and all your data.
+          </p>
+          <button
+            onClick={handleDeleteAccount}
+            className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 transition"
+          >
+            Delete Account
+          </button>
+        </section>
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/SearchResults.tsx" description="User search results page">
+import { useEffect, useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { api, getMediaUrl } from '@/lib/api';
+import { Nav } from '@/components/Nav';
+import { useToast } from '@/lib/toast';
+import type { Profile, ProfilesSearchResponse } from '@/lib/types';
+
+export default function SearchResults() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQuery = searchParams.get('query') ?? '';
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const runSearch = async (q: string) => {
+    if (!q.trim()) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get<ProfilesSearchResponse>(
+        `/profiles/search?query=${encodeURIComponent(q.trim())}&limit=30`
+      );
+      setResults(res.profiles ?? []);
+    } catch {
+      toast('Search failed.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    runSearch(initialQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchParams(query ? { query } : {});
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <Nav />
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        <h1 className="text-2xl font-bold mb-4">Search Users</h1>
+        <form onSubmit={onSubmit} className="flex gap-2 mb-6">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or username"
+            className="flex-1 px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition"
+          >
+            Search
+          </button>
+        </form>
+
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">
+            Searching…
+          </div>
+        ) : !initialQuery ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            Enter a name to search.
+          </div>
+        ) : results.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            No users found.
+          </div>
+        ) : (
+          <div className="bg-card border border-border rounded-lg divide-y divide-border">
+            {results.map((p) => (
+              <Link
+                key={p._id}
+                to={`/users/${p.userId}`}
+                className="flex items-center gap-3 p-3 hover:bg-muted/40 transition"
+              >
+                {p.bioImageUrl ? (
+                  <img
+                    src={getMediaUrl(p.bioImageUrl)}
+                    alt=""
+                    className="w-12 h-12 rounded-full object-cover border border-border"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-muted" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    @{p.username}
+                  </div>
+                  {p.bio && (
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                      {p.bio}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/AdminLogin.tsx" description="Admin login page">
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/lib/toast';
+import { ApiError } from '@/lib/api';
+
+export default function AdminLogin() {
+  const { adminLogin } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await adminLogin(username, password);
+      navigate('/admin', { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast('Invalid admin credentials.', 'error');
+      } else if (err instanceof ApiError && err.status === 503) {
+        toast('Admin not configured.', 'error');
+      } else {
+        toast('Admin login failed.', 'error');
+      }
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Commons Admin</h1>
+          <p className="text-muted-foreground mt-2">Site operator sign in</p>
+        </div>
+        <form
+          onSubmit={onSubmit}
+          className="bg-card border border-border rounded-lg p-6 space-y-4"
+        >
+          <div className="space-y-2">
+            <label htmlFor="username" className="text-sm font-medium">
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              required
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition"
+          >
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+        <div className="text-center text-sm text-muted-foreground">
+          <Link to="/login" className="text-primary hover:underline">
+            Back to user login
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/AdminDashboard.tsx" description="Admin dashboard: recent posts, recent members, moderation queue link">
+import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api, getMediaUrl } from '@/lib/api';
+import { AdminNav } from '@/components/AdminNav';
+import { useToast } from '@/lib/toast';
+import type {
+  PostsListResponse,
+  MembersResponse,
+  ModerationQueueResponse,
+  Post,
+  Member,
+} from '@/lib/types';
+
+export default function AdminDashboard() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [queueCount, setQueueCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [postsRes, membersRes, queueRes] = await Promise.all([
+        api.get<PostsListResponse>('/admin/dashboard/recent-posts?limit=20'),
+        api.get<MembersResponse>('/admin/dashboard/recent-members?limit=20'),
+        api.get<ModerationQueueResponse>(
+          '/admin/moderation/queue?limit=50'
+        ),
+      ]);
+      setPosts(postsRes.posts ?? []);
+      setMembers(membersRes.members ?? []);
+      setQueueCount((queueRes.items ?? []).length);
+    } catch {
+      toast('Could not load dashboard.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRemove = async (postId: string) => {
+    if (!confirm('Remove this post?')) return;
+    try {
+      await api.delete(`/admin/posts/${postId}`);
+      await fetchData();
+    } catch {
+      toast('Could not remove post.', 'error');
+    }
+  };
+
+  const statusColors: Record<string, string> = {
+    approved: 'bg-green-500/20 text-green-700',
+    admin_approved: 'bg-green-500/20 text-green-700',
+    pending: 'bg-amber-500/20 text-amber-700',
+    flagged: 'bg-destructive/20 text-destructive',
+    admin_removed: 'bg-muted text-muted-foreground',
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <AdminNav />
+      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+          <Link
+            to="/admin/moderation"
+            className="flex items-center gap-2 px-4 py-2 rounded-md bg-card border border-border hover:bg-muted/40 transition"
+          >
+            <span className="text-sm font-medium">Moderation Queue</span>
+            {queueCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
+                {queueCount}
+              </span>
+            )}
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">
+            Loading…
+          </div>
+        ) : (
+          <>
+            <section>
+              <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider mb-3">
+                Recent Posts
+              </h2>
+              {posts.length === 0 ? (
+                <div className="bg-card border border-border rounded-lg p-8 text-center text-muted-foreground text-sm">
+                  No posts yet
+                </div>
+              ) : (
+                <div className="bg-card border border-border rounded-lg divide-y divide-border">
+                  {posts.map((post) => (
+                    <div
+                      key={post._id}
+                      className="p-3 flex items-center gap-3"
+                    >
+                      {post.content.imageUrl && (
+                        <Link
+                          to={`/posts/${post._id}`}
+                          className="flex-shrink-0"
+                        >
+                          <img
+                            src={getMediaUrl(post.content.imageUrl)}
+                            alt=""
+                            className="w-14 h-14 object-cover rounded border border-border"
+                          />
+                        </Link>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          to={`/posts/${post._id}`}
+                          className="text-sm font-medium line-clamp-1 hover:underline"
+                        >
+                          {post.content.caption || '(no caption)'}
+                        </Link>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                          <span>
+                            by{' '}
+                            {post.author ? (
+                              <Link
+                                to={`/users/${post.authorId}`}
+                                className="hover:underline"
+                              >
+                                {post.author.name}
+                              </Link>
+                            ) : (
+                              '[deleted]'
+                            )}
+                          </span>
+                          <span>·</span>
+                          <span>
+                            {new Date(post.createdAt).toLocaleDateString()}
+                          </span>
+                          <span
+                            className={
+                              'px-1.5 py-0.5 rounded text-[10px] ' +
+                              (statusColors[post.moderationStatus] ??
+                                'bg-muted text-muted-foreground')
+                            }
+                          >
+                            {post.moderationStatus}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemove(post._id)}
+                        className="px-2 py-1 rounded text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section>
+              <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider mb-3">
+                Recent Members
+              </h2>
+              {members.length === 0 ? (
+                <div className="bg-card border border-border rounded-lg p-8 text-center text-muted-foreground text-sm">
+                  No members yet
+                </div>
+              ) : (
+                <div className="bg-card border border-border rounded-lg divide-y divide-border">
+                  {members.map((m) => (
+                    <Link
+                      key={m.userId}
+                      to={`/users/${m.userId}`}
+                      className="p-3 flex items-center gap-3 hover:bg-muted/40 transition"
+                    >
+                      {m.avatarUrl ? (
+                        <img
+                          src={getMediaUrl(m.avatarUrl)}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover border border-border"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-muted" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">
+                          {m.displayName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Joined{' '}
+                          {new Date(m.joinedAt).toLocaleDateString()} ·{' '}
+                          {m.followerCount} followers
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/pages/AdminModerationQueue.tsx" description="Admin moderation queue with approve/remove actions">
+import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api, getMediaUrl } from '@/lib/api';
+import { AdminNav } from '@/components/AdminNav';
+import { useToast } from '@/lib/toast';
+import type {
+  ModerationQueueResponse,
+  ModerationQueueItem,
+} from '@/lib/types';
+
+const ruleLabels: Record<string, string> = {
+  harassment: 'Harassment',
+  hate: 'Hate',
+  sexually_explicit: 'Sexually explicit material',
+  spam: 'Spam',
+};
+
+export default function AdminModerationQueue() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [items, setItems] = useState<ModerationQueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<ModerationQueueResponse>(
+        '/admin/moderation/queue?limit=100'
+      );
+      setItems(res.items ?? []);
+    } catch {
+      toast('Could not load moderation queue.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleApprove = async (reviewId: string) => {
+    setWorking(reviewId);
+    try {
+      await api.post(`/admin/moderation/${reviewId}/approve`);
+      await fetchData();
+    } catch {
+      toast('Could not approve item.', 'error');
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const handleRemove = async (reviewId: string) => {
+    if (!confirm('Remove this item permanently?')) return;
+    setWorking(reviewId);
+    try {
+      await api.post(`/admin/moderation/${reviewId}/remove`);
+      await fetchData();
+    } catch {
+      toast('Could not remove item.', 'error');
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-24">
+      <AdminNav />
+      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Moderation Queue</h1>
+          <button
+            onClick={() => navigate('/admin')}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            ← Back to dashboard
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">
+            Loading…
+          </div>
+        ) : items.length === 0 ? (
+          <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground">
+            No items in moderation queue
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item) => {
+              const isPost = item.targetType === 'post';
+              const postHref = isPost ? `/posts/${item.targetId}` : null;
+              const authorHref = item.authorId
+                ? `/users/${item.authorId}`
+                : null;
+              return (
+                <div
+                  key={item.reviewId}
+                  className="bg-card border border-border rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-medium uppercase">
+                        {item.targetType}
+                      </span>
+                      {item.ruleViolated && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700">
+                          {ruleLabels[item.ruleViolated] ?? item.ruleViolated}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(item.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {isPost && item.content.imageUrl && (
+                    <Link to={postHref!} className="block">
+                      <img
+                        src={getMediaUrl(item.content.imageUrl)}
+                        alt=""
+                        className="w-full max-h-72 object-cover rounded border border-border"
+                      />
+                    </Link>
+                  )}
+
+                  {isPost && item.content.caption && (
+                    <p className="text-sm whitespace-pre-wrap">
+                      {item.content.caption}
+                    </p>
+                  )}
+
+                  {!isPost && item.content.text && (
+                    <p className="text-sm whitespace-pre-wrap bg-muted p-3 rounded">
+                      {item.content.text}
+                    </p>
+                  )}
+
+                  <div className="text-sm bg-muted/50 p-3 rounded">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">
+                      AI rationale
+                    </div>
+                    <p className="text-sm">{item.rationale}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <span>by</span>
+                      {item.author ? (
+                        authorHref ? (
+                          <Link
+                            to={authorHref}
+                            className="font-medium text-foreground hover:underline"
+                          >
+                            {item.author.name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-foreground">
+                            {item.author.name}
+                          </span>
+                        )
+                      ) : (
+                        <span>[deleted]</span>
+                      )}
+                      {isPost && (
+                        <Link
+                          to={postHref!}
+                          className="ml-3 text-primary hover:underline"
+                        >
+                          Open post →
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-border">
+                    <button
+                      onClick={() => handleApprove(item.reviewId)}
+                      disabled={working === item.reviewId}
+                      className="px-4 py-2 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                    >
+                      {working === item.reviewId ? '…' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => handleRemove(item.reviewId)}
+                      disabled={working === item.reviewId}
+                      className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 transition"
+                    >
+                      {working === item.reviewId ? '…' : 'Remove'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/App.tsx" description="Main App component with all routes">
+import { Routes, Route } from 'react-router-dom';
+import { AuthProvider } from '@/lib/auth';
+import { ToastProvider } from '@/lib/toast';
+import { AuthGuard, ProfileGuard, AdminGuard } from '@/components/ProtectedRoute';
+
+import Root from '@/pages/Root';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import Onboarding from '@/pages/Onboarding';
+import HomeFeed from '@/pages/HomeFeed';
+import Discover from '@/pages/Discover';
+import PostDetail from '@/pages/PostDetail';
+import CreatePost from '@/pages/CreatePost';
+import EditPost from '@/pages/EditPost';
+import UserProfile from '@/pages/UserProfile';
+import MyProfile from '@/pages/MyProfile';
+import EditProfile from '@/pages/EditProfile';
+import Notifications from '@/pages/Notifications';
+import Billing from '@/pages/Billing';
+import Settings from '@/pages/Settings';
+import SearchResults from '@/pages/SearchResults';
+import AdminLogin from '@/pages/AdminLogin';
+import AdminDashboard from '@/pages/AdminDashboard';
+import AdminModerationQueue from '@/pages/AdminModerationQueue';
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<Root />} />
+
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+
+          {/* Auth-only (onboarding allowed) */}
+          <Route
+            path="/onboarding"
+            element={
+              <AuthGuard>
+                <Onboarding />
+              </AuthGuard>
+            }
+          />
+
+          {/* Auth + profile required */}
+          <Route
+            path="/home"
+            element={
+              <ProfileGuard>
+                <HomeFeed />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/discover"
+            element={
+              <ProfileGuard>
+                <Discover />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/posts/new"
+            element={
+              <ProfileGuard>
+                <CreatePost />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/posts/:postId"
+            element={
+              <ProfileGuard>
+                <PostDetail />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/posts/:postId/edit"
+            element={
+              <ProfileGuard>
+                <EditPost />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/users/:userId"
+            element={
+              <ProfileGuard>
+                <UserProfile />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/me"
+            element={
+              <ProfileGuard>
+                <MyProfile />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/me/profile/edit"
+            element={
+              <ProfileGuard>
+                <EditProfile />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProfileGuard>
+                <Notifications />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <ProfileGuard>
+                <Billing />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProfileGuard>
+                <Settings />
+              </ProfileGuard>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <ProfileGuard>
+                <SearchResults />
+              </ProfileGuard>
+            }
+          />
+
+          {/* Admin only */}
+          <Route
+            path="/admin"
+            element={
+              <AdminGuard>
+                <AdminDashboard />
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/moderation"
+            element={
+              <AdminGuard>
+                <AdminModerationQueue />
+              </AdminGuard>
+            }
+          />
+
+          {/* Fallback */}
+          <Route path="*" element={<Root />} />
+        </Routes>
+      </AuthProvider>
+    </ToastProvider>
+  );
+}
+</dyad-write>
+
+<dyad-write path="src/main.tsx" description="App entry: wraps App in BrowserRouter and imports globals.css">
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import App from './App';
+import './globals.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </StrictMode>
+);
+</dyad-write>
